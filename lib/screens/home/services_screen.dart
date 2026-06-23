@@ -44,7 +44,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
         ];
         
         for (var service in servicesData) {
-          _categories.add(_ServiceCategory(service['service_name'] ?? 'Unknown', Icons.electrical_services_outlined));
+          _categories.add(_ServiceCategory(
+            service['service_name'] ?? 'Unknown',
+            Icons.electrical_services_outlined,
+            imagePath: _getCategoryImagePath(service['service_name'] ?? ''),
+          ));
         }
 
         _services = servicesData.map((s) => _ServiceItem(
@@ -58,6 +62,153 @@ class _ServicesScreenState extends State<ServicesScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  String? _getCategoryImagePath(String categoryName) {
+    String lowerName = categoryName.toLowerCase();
+    String widgetCategory = widget.categoryName.toLowerCase();
+
+    // CCTV & Smart Devices categories
+    if (widgetCategory.contains('cctv') || widgetCategory.contains('smart')) {
+      String cctvPath = 'assets/catogries/cctv';
+      if (lowerName.contains('lock') || lowerName.contains('smart')) return '$cctvPath/smartlock.png';
+      if (lowerName.contains('camera') || lowerName.contains('repair')) return '$cctvPath/camerarepair.png';
+      if (lowerName.contains('cctv') || lowerName.contains('install')) return '$cctvPath/cctvinstall.png';
+      if (lowerName.contains('door') || lowerName.contains('video')) return '$cctvPath/videodoor.png';
+    }
+
+    // Vehicle categories
+    if (widgetCategory.contains('vehicle') || widgetCategory.contains('car') || widgetCategory.contains('bike')) {
+      String vehiclePath = 'assets/catogries/vehicle';
+      if (lowerName.contains('interior') || lowerName.contains('clean')) return '$vehiclePath/interiorclean.png';
+      if (lowerName.contains('car') || lowerName.contains('wash')) return '$vehiclePath/carwash.png';
+      if (lowerName.contains('bike') || lowerName.contains('service')) return '$vehiclePath/bikeservice.png';
+    }
+
+    // Loan categories
+    if (widgetCategory.contains('loan') || widgetCategory.contains('finance')) {
+      String loanPath = 'assets/catogries/loan';
+      if (lowerName.contains('personal')) return '$loanPath/personal.png';
+      if (lowerName.contains('home')) return '$loanPath/home.png';
+      if (lowerName.contains('business')) return '$loanPath/business.png';
+    }
+    
+    // Electrician categories
+    String elecPath = 'assets/catogries/Electrician';
+    if (lowerName.contains('switch') || lowerName.contains('socket')) {
+      return '$elecPath/socket.png';
+    } else if (lowerName.contains('fan')) {
+      return '$elecPath/fan.png';
+    } else if (lowerName.contains('power failure') || lowerName.contains('failure')) {
+      return '$elecPath/power.png';
+    } else if (lowerName.contains('light')) {
+      return '$elecPath/light.png';
+    } else if (lowerName.contains('wiring') || lowerName.contains('rewire')) {
+      return '$elecPath/rewire.png';
+    } else if (lowerName.contains('inverter')) {
+      return '$elecPath/invertor.png';
+    }
+
+    // Plumber categories
+    String plumbPath = 'assets/catogries/plumber';
+    if (lowerName.contains('toilet')) {
+      return '$plumbPath/toilet.png';
+    } else if (lowerName.contains('drain')) {
+      return '$plumbPath/drain.png';
+    } else if (lowerName.contains('tap') || lowerName.contains('faucet')) {
+      return '$plumbPath/facuetrepair.png';
+    } else if (lowerName.contains('pipe') || lowerName.contains('leak')) {
+      return '$plumbPath/pipeleak.png';
+    } else if (lowerName.contains('tank')) {
+      return '$plumbPath/watertank.png';
+    } else if (lowerName.contains('bathroom')) {
+      if (widget.categoryName.toLowerCase().contains('clean') || widget.categoryName.toLowerCase().contains('pest')) {
+        return 'assets/catogries/cleaning&pest/bathroom.png';
+      }
+      return '$plumbPath/bathroom.png';
+    }
+
+    // Cleaning & Pest Control categories
+    String cleanPath = 'assets/catogries/cleaning&pest';
+    if (lowerName.contains('mattress')) {
+      return '$cleanPath/mattres.png';
+    } else if (lowerName.contains('pest')) {
+      return '$cleanPath/pest.png';
+    } else if (lowerName.contains('sofa') || lowerName.contains('carpet')) {
+      return '$cleanPath/sofa.png';
+    } else if (lowerName.contains('kitchen')) {
+      if (widget.categoryName.toLowerCase().contains('clean') || widget.categoryName.toLowerCase().contains('pest')) {
+        return '$cleanPath/kitchen.png';
+      }
+    } else if (lowerName.contains('clean')) {
+      return '$cleanPath/cleaning.png';
+    }
+
+    // Carpenter categories
+    String carpPath = 'assets/catogries/carpenter';
+    if (lowerName.contains('cupboard') || lowerName.contains('shelf')) {
+      return '$carpPath/cupboard.png';
+    } else if (lowerName.contains('door')) {
+      return '$carpPath/door.png';
+    } else if (lowerName.contains('furniture')) {
+      return '$carpPath/furniture.png';
+    } else if (lowerName.contains('modular') || (lowerName.contains('kitchen') && widget.categoryName.toLowerCase().contains('carpenter'))) {
+      return '$carpPath/modkitchen.png';
+    } else if (lowerName.contains('wood') || lowerName.contains('polish')) {
+      return '$carpPath/woodpolish.png';
+    }
+
+    // Appliance categories
+    String appPath = 'assets/catogries/appliance';
+    if (lowerName.contains('refrigerator') || lowerName.contains('fridge')) {
+      return '$appPath/fridge.png';
+    } else if (lowerName.contains('ac repair') || lowerName.startsWith('ac ') || lowerName == 'ac') {
+      return '$appPath/ac.png';
+    } else if (lowerName.contains('washing')) {
+      return '$appPath/washingmachine.png';
+    } else if (lowerName.contains('microwave') || lowerName.contains('oven')) {
+      return '$appPath/microwave.png';
+    } else if (lowerName.contains('tv') || lowerName.contains('television')) {
+      return '$appPath/tv.png';
+    }
+
+    // Bulk categories
+    String bulkPath = 'assets/catogries/bulk';
+    if (lowerName.contains('event')) {
+      return '$bulkPath/event.png';
+    } else if (lowerName.contains('office')) {
+      return '$bulkPath/office.png';
+    } else if (lowerName.contains('wholesale')) {
+      return '$bulkPath/wholesale.png';
+    }
+
+    // Painting categories
+    String paintPath = 'assets/catogries/painting';
+    if (lowerName.contains('interior')) {
+      return '$paintPath/interior.png';
+    } else if (lowerName.contains('exterior')) {
+      return '$paintPath/exterior.png';
+    } else if (lowerName.contains('proof')) {
+      return '$paintPath/waterproof.png';
+    } else if (lowerName.contains('texture') || lowerName.contains('design') || lowerName.contains('wall')) {
+      return '$paintPath/wallpaper.png';
+    } else if (lowerName.contains('renovation')) {
+      return '$paintPath/renovation.png';
+    }
+
+    // RO & Water Purifier categories
+    String roPath = 'assets/catogries/ro';
+    if (lowerName.contains('repair') || lowerName.contains('maintenance')) {
+      return '$roPath/repair.png';
+    } else if (lowerName.contains('quality')) {
+      return '$roPath/waterquality.png';
+    } else if (lowerName.contains('filter')) {
+      return '$roPath/filterraplaement.png';
+    } else if (lowerName.contains('installation') || lowerName.contains('install') || lowerName.contains('ro ')) {
+      return '$roPath/ROinstall.png';
+    }
+
+    return null;
   }
 
   @override
@@ -205,7 +356,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(category.icon, color: contentColor, size: 28),
+            category.imagePath != null
+                ? Image.asset(category.imagePath!, width: 28, height: 28, color: contentColor)
+                : Icon(category.icon, color: contentColor, size: 28),
             const SizedBox(height: 6),
             Text(
               category.name,
@@ -395,8 +548,9 @@ class _ServiceCategory {
   final String name;
   final IconData icon;
   final bool isSpecial;
+  final String? imagePath;
 
-  _ServiceCategory(this.name, this.icon, {this.isSpecial = false});
+  _ServiceCategory(this.name, this.icon, {this.isSpecial = false, this.imagePath});
 }
 
 class _ServiceItem {

@@ -156,7 +156,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                             onPressed: () {
                               Navigator.pushReplacement(
                                 context,
-                                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                MaterialPageRoute(builder: (context) => const HomeScreen()),
                               );
                             },
                             child: const Text(
@@ -175,9 +175,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         children: [
                           TextButton(
                             onPressed: () {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(builder: (context) => const HomeScreen()),
+                              _pageController.animateToPage(
+                                _pages.length - 1,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
                               );
                             },
                           child: const Text(
