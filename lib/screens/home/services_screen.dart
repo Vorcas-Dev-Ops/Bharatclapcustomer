@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'service_details_screen.dart';
 import '../../services/api_service.dart';
+import '../cart/cart_screen.dart';
 
 class ServicesScreen extends StatefulWidget {
   final String? categoryId;
@@ -22,6 +23,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   ];
 
   List<_ServiceItem> _services = [];
+  List<_ServiceItem> _allSubServices = [];
 
   @override
   void initState() {
@@ -36,6 +38,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
     
     final servicesData = await ApiService.getServices(widget.categoryId!);
+    final subServicesData = await ApiService.getSubServicesByCategory(widget.categoryId!);
+
     if (mounted) {
       setState(() {
         _categories = [
@@ -48,16 +52,31 @@ class _ServicesScreenState extends State<ServicesScreen> {
             service['service_name'] ?? 'Unknown',
             Icons.electrical_services_outlined,
             imagePath: _getCategoryImagePath(service['service_name'] ?? ''),
+            serviceId: service['_id'],
           ));
         }
 
-        _services = servicesData.map((s) => _ServiceItem(
-          title: s['service_name'] ?? 'Unknown',
-          rating: (s['avg_rating'] ?? 4.8).toString(),
-          time: s['duration']?.toString() ?? '45',
-          price: '₹${s['base_price'] ?? 199}',
-          imagePath: s['images'] != null && s['images'].isNotEmpty ? s['images'][0] : 'assets/images/switch.png',
-        )).toList().cast<_ServiceItem>();
+        _allSubServices = subServicesData.map((ss) {
+          String? sid;
+          if (ss['service_id'] is Map) {
+            sid = ss['service_id']['_id'];
+          } else {
+            sid = ss['service_id'];
+          }
+          return _ServiceItem(
+            title: ss['subservice_name'] ?? 'Unknown',
+            rating: (ss['avg_rating'] ?? 4.8).toString(),
+            time: ss['duration']?.toString() ?? '45',
+            price: '₹${ss['base_price'] ?? 199}',
+            imagePath: ss['image'] != null && ss['image'].toString().isNotEmpty ? ss['image'] : 'assets/images/switch.png',
+            serviceId: sid,
+            subserviceId: ss['_id'],
+            categoryId: widget.categoryId,
+            description: ss['description'],
+          );
+        }).toList().cast<_ServiceItem>();
+        
+        _services = List.from(_allSubServices);
         
         _isLoading = false;
       });
@@ -261,31 +280,39 @@ class _ServicesScreenState extends State<ServicesScreen> {
             ),
           ],
         ),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF1B1464)),
-            ),
-            Positioned(
-              right: -2,
-              top: -2,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1B1464),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CartScreen()),
+            );
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
                   shape: BoxShape.circle,
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
-                child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF1B1464)),
               ),
-            ),
-          ],
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1B1464),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -344,6 +371,18 @@ class _ServicesScreenState extends State<ServicesScreen> {
       onTap: () {
         setState(() {
           _selectedTabIndex = index;
+          if (index == 0) {
+            _services = [];
+          } else if (index == 1) {
+            _services = List.from(_allSubServices);
+          } else {
+            final selectedCat = _categories[index];
+            if (selectedCat.serviceId != null) {
+              _services = _allSubServices.where((s) => s.serviceId == selectedCat.serviceId).toList();
+            } else {
+              _services = [];
+            }
+          }
         });
       },
       child: Container(
@@ -400,11 +439,14 @@ class _ServicesScreenState extends State<ServicesScreen> {
           context,
           MaterialPageRoute(
             builder: (context) => ServiceDetailsScreen(
+              subserviceId: service.subserviceId,
+              categoryId: service.categoryId,
               title: service.title,
               price: service.price,
               rating: service.rating,
               time: service.time,
               imagePath: service.imagePath,
+              description: service.description,
             ),
           ),
         );
@@ -430,20 +472,31 @@ class _ServicesScreenState extends State<ServicesScreen> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.asset(
-              service.imagePath,
-              height: 90,
-              width: 90,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  height: 90,
-                  width: 90,
-                  color: Colors.grey.shade100,
-                  child: Icon(Icons.image, color: Colors.grey.shade400),
-                );
-              },
-            ),
+            child: service.imagePath.startsWith('http')
+                ? Image.network(
+                    service.imagePath,
+                    height: 90,
+                    width: 90,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 90,
+                      width: 90,
+                      color: Colors.grey.shade100,
+                      child: Icon(Icons.image, color: Colors.grey.shade400),
+                    ),
+                  )
+                : Image.asset(
+                    service.imagePath,
+                    height: 90,
+                    width: 90,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      height: 90,
+                      width: 90,
+                      color: Colors.grey.shade100,
+                      child: Icon(Icons.image, color: Colors.grey.shade400),
+                    ),
+                  ),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -549,8 +602,9 @@ class _ServiceCategory {
   final IconData icon;
   final bool isSpecial;
   final String? imagePath;
+  final String? serviceId;
 
-  _ServiceCategory(this.name, this.icon, {this.isSpecial = false, this.imagePath});
+  _ServiceCategory(this.name, this.icon, {this.isSpecial = false, this.imagePath, this.serviceId});
 }
 
 class _ServiceItem {
@@ -559,6 +613,10 @@ class _ServiceItem {
   final String? time;
   final String price;
   final String imagePath;
+  final String? serviceId;
+  final String? subserviceId;
+  final String? categoryId;
+  final String? description;
 
   _ServiceItem({
     required this.title,
@@ -566,5 +624,9 @@ class _ServiceItem {
     this.time,
     required this.price,
     required this.imagePath,
+    this.serviceId,
+    this.subserviceId,
+    this.categoryId,
+    this.description,
   });
 }

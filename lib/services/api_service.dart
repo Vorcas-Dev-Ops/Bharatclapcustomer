@@ -9,7 +9,7 @@ class ApiService {
   static String get baseUrl {
     String url = dotenv.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:5000/api';
     if (!kIsWeb && Platform.isAndroid) {
-      url = url.replaceAll('localhost', '10.0.2.2');
+      url = url.replaceAll('localhost', '10.0.2.2');//10.0.2.2
     }
     return url;
   }
@@ -189,6 +189,22 @@ class ApiService {
   static Future<List<dynamic>> getServices(String categoryId) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/services?category_id=$categoryId'));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data;
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Get Sub-services by Category
+  static Future<List<dynamic>> getSubServicesByCategory(String categoryId) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/sub-services?category_id=$categoryId'));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
