@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'services_screen.dart';
+import 'beauty_services_screen.dart';
 import '../../services/api_service.dart';
+import '../cart/cart_screen.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -72,30 +74,38 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             color: Color(0xFF1B1464),
           ),
         ),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF1B1464)),
-            ),
-            Positioned(
-              right: -2,
-              top: -2,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1B1464),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CartScreen()),
+            );
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF1B1464)),
               ),
-            ),
-          ],
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1B1464),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -181,13 +191,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => ServicesScreen(
-            categoryId: data['_id'],
-            categoryName: title,
-          )),
-        );
+        if (title.toLowerCase().contains('beauty')) {
+          _showMenWomenDialog(context, data['_id'], title);
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => ServicesScreen(
+              categoryId: data['_id'],
+              categoryName: title,
+            )),
+          );
+        }
       },
       child: Container(
         decoration: BoxDecoration(
@@ -374,6 +388,84 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 Text('From $price', style: const TextStyle(fontSize: 13, color: Color(0xFF1B1464), fontWeight: FontWeight.bold)),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showMenWomenDialog(BuildContext context, String categoryId, String categoryName) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: const Icon(Icons.close, color: Colors.grey),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildGenderOption(context, 'Men', categoryId, categoryName),
+                    _buildGenderOption(context, 'Women', categoryId, categoryName),
+                  ],
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGenderOption(BuildContext context, String gender, String categoryId, String categoryName) {
+    String imagePath = gender == 'Men' ? 'assets/images/men_icon.png' : 'assets/images/women_icon.png';
+    return GestureDetector(
+      onTap: () {
+        Navigator.pop(context); // close dialog
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BeautyServicesScreen(
+              categoryId: categoryId,
+              categoryName: '$categoryName - $gender',
+              gender: gender,
+            ),
+          ),
+        );
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 130,
+            height: 130,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300, width: 1),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Image.asset(imagePath, fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            gender,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
         ],
       ),

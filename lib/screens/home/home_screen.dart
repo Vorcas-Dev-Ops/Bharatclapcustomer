@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'categories_screen.dart';
 import '../profile/profile_screen.dart';
+import '../../services/api_service.dart';
+import 'services_screen.dart';
+import '../address/map_screen.dart';
+import 'search_screen.dart';
+import '../cart/cart_screen.dart';
+import '../bookings/bookings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -11,6 +17,33 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  List<dynamic> _apiCategories = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCategories();
+  }
+
+  Future<void> _fetchCategories() async {
+    final categories = await ApiService.getCategories();
+    if (mounted) {
+      setState(() {
+        _apiCategories = categories;
+      });
+    }
+  }
+
+  String? _getCategoryId(String keyword) {
+    if (_apiCategories.isEmpty) return null;
+    for (var cat in _apiCategories) {
+      String name = (cat['category_name'] ?? '').toLowerCase();
+      if (name.contains(keyword.toLowerCase())) {
+        return cat['_id'];
+      }
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case 1:
         return const CategoriesScreen();
       case 2:
-        return const Center(child: Text('Bookings Screen'));
+        return const BookingsScreen();
       case 3:
         return const ProfileScreen();
       default:
@@ -74,48 +107,64 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          children: [
-            const Icon(Icons.location_on_outlined, color: Color(0xFF1B1464)),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: const [
-                    Text('TC Palaya', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                    Icon(Icons.keyboard_arrow_down, color: Color(0xFF1B1464)),
-                  ],
-                ),
-                Text('Bangalore, Karnataka', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-              ],
-            ),
-          ],
-        ),
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                shape: BoxShape.circle,
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const MapScreen()),
+            );
+          },
+          child: Row(
+            children: [
+              const Icon(Icons.location_on_outlined, color: Color(0xFF1B1464)),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Text('TC Palaya', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      Icon(Icons.keyboard_arrow_down, color: Color(0xFF1B1464)),
+                    ],
+                  ),
+                  Text('Bangalore, Karnataka', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
               ),
-              child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF1B1464)),
-            ),
-            Positioned(
-              right: -2,
-              top: -2,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1B1464),
+            ],
+          ),
+        ),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const CartScreen()),
+            );
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF1B1464)),
               ),
-            ),
-          ],
+              Positioned(
+                right: -2,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF1B1464),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -123,17 +172,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSearchBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
-        children: [
-          Icon(Icons.search, color: Colors.grey.shade500),
-          const SizedBox(width: 12),
-          Text('Search for home services...', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
-        ],
+      child: TextField(
+        readOnly: true,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SearchScreen()),
+          );
+        },
+        decoration: InputDecoration(
+          icon: Icon(Icons.search, color: Colors.grey.shade500),
+          hintText: 'Search for services...',
+          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        ),
       ),
     );
   }
@@ -151,30 +209,60 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCategories() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildCategoryItem('Cleaning', Icons.cleaning_services_outlined),
-        _buildCategoryItem('Plumbing', Icons.plumbing),
-        _buildCategoryItem('Electric', Icons.electrical_services),
-        _buildCategoryItem('Pest', Icons.pest_control),
+        _buildCategoryItem('Instant', Icons.bolt, null, 'Instant'),
+        _buildCategoryItem('Cleaning\n& Pest', Icons.cleaning_services_outlined, _getCategoryId('clean'), 'Cleaning & Pest Control'),
+        _buildCategoryItem('Womens\nSalon', Icons.face_retouching_natural, _getCategoryId('women'), 'Womens Salon'),
+        _buildCategoryItem('Mens\nSalon', Icons.content_cut, _getCategoryId('men'), 'Mens Salon'),
       ],
     );
   }
 
-  Widget _buildCategoryItem(String title, IconData icon) {
-    return Column(
-      children: [
-        Container(
-          width: 65,
-          height: 65,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(20),
+  Widget _buildCategoryItem(String title, IconData icon, String? categoryId, String fullCategoryName) {
+    bool isInstant = title == 'Instant';
+    return GestureDetector(
+      onTap: () {
+        if (categoryId != null || isInstant) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ServicesScreen(
+                categoryId: categoryId,
+                categoryName: fullCategoryName,
+              ),
+            ),
+          );
+        }
+      },
+      child: Column(
+        children: [
+          Container(
+            width: 65,
+            height: 65,
+            decoration: BoxDecoration(
+              color: isInstant ? Colors.green.shade50 : Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(icon, color: isInstant ? Colors.green : const Color(0xFF1B1464), size: 28),
           ),
-          child: Icon(icon, color: const Color(0xFF1B1464), size: 28),
-        ),
-        const SizedBox(height: 8),
-        Text(title, style: TextStyle(fontSize: 13, color: Colors.grey.shade800, fontWeight: FontWeight.w500)),
-      ],
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 75,
+            child: Text(
+              title, 
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              style: TextStyle(
+                fontSize: 12, 
+                color: isInstant ? Colors.green : Colors.grey.shade800, 
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
