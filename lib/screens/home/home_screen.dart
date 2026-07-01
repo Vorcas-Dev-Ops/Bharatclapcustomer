@@ -3,10 +3,12 @@ import 'categories_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../services/api_service.dart';
 import 'services_screen.dart';
+import 'beauty_services_screen.dart';
 import '../address/map_screen.dart';
 import 'search_screen.dart';
 import '../cart/cart_screen.dart';
 import '../bookings/bookings_screen.dart';
+import '../../providers/cart_state.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,11 +20,22 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   List<dynamic> _apiCategories = [];
+  Map<String, dynamic>? _currentAddress;
 
   @override
   void initState() {
     super.initState();
     _fetchCategories();
+    _fetchAddress();
+  }
+
+  Future<void> _fetchAddress() async {
+    final addresses = await ApiService.getAddresses();
+    if (mounted && addresses.isNotEmpty) {
+      setState(() {
+        _currentAddress = addresses.first;
+      });
+    }
   }
 
   Future<void> _fetchCategories() async {
@@ -122,12 +135,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    children: const [
-                      Text('TC Palaya', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                      Icon(Icons.keyboard_arrow_down, color: Color(0xFF1B1464)),
+                    children: [
+                      Text(_currentAddress?['area'] ?? 'TC Palaya', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1B1464)),
                     ],
                   ),
-                  Text('Bangalore, Karnataka', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  Text('${_currentAddress?['city'] ?? 'Bangalore'}, ${_currentAddress?['state'] ?? 'Karnataka'}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                 ],
               ),
             ],
@@ -160,7 +173,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Color(0xFF1B1464),
                     shape: BoxShape.circle,
                   ),
-                  child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: CartState.cartItemCount,
+                    builder: (context, count, child) {
+                      if (count == 0) return const SizedBox.shrink();
+                      return Text(
+                        '$count', 
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -201,7 +223,14 @@ class _HomeScreenState extends State<HomeScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         const Text('Categories', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-        const Text('View All', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1B1464))),
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _currentIndex = 1;
+            });
+          },
+          child: const Text('View All', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1B1464))),
+        ),
       ],
     );
   }
@@ -223,7 +252,29 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isInstant = title == 'Instant';
     return GestureDetector(
       onTap: () {
-        if (categoryId != null || isInstant) {
+        if (title.contains('Womens')) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BeautyServicesScreen(
+                categoryId: categoryId ?? _getCategoryId('beauty') ?? _getCategoryId('salon') ?? '',
+                categoryName: 'Womens Salon',
+                gender: 'Women',
+              ),
+            ),
+          );
+        } else if (title.contains('Mens')) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BeautyServicesScreen(
+                categoryId: categoryId ?? _getCategoryId('beauty') ?? _getCategoryId('salon') ?? '',
+                categoryName: 'Mens Salon',
+                gender: 'Men',
+              ),
+            ),
+          );
+        } else if (categoryId != null || isInstant) {
           Navigator.push(
             context,
             MaterialPageRoute(

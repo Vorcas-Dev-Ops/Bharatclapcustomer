@@ -1,43 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../services/api_service.dart';
+import '../../providers/cart_state.dart';
 import 'slot_selection_screen.dart';
-
-class CartItem {
-  final String id;
-  final String name;
-  int quantity;
-  final double price;
-  final String? time;
-  final String? imagePath;
-
-  CartItem({
-    required this.id,
-    required this.name,
-    this.quantity = 1,
-    required this.price,
-    this.time,
-    this.imagePath,
-  });
-}
-
-class CartCategory {
-  final String id;
-  final String name;
-  final IconData icon;
-  final String bookingId;
-  final List<CartItem> items;
-
-  CartCategory({
-    required this.id,
-    required this.name,
-    required this.icon,
-    required this.bookingId,
-    required this.items,
-  });
-}
 
 class CartScreen extends StatefulWidget {
   final bool useSingleCategoryDesign;
-
   const CartScreen({super.key, this.useSingleCategoryDesign = false});
 
   @override
@@ -45,76 +12,39 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  late List<CartCategory> _cartCategories;
+  Map<String, dynamic>? _currentAddress;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.useSingleCategoryDesign) {
-      _cartCategories = [
-        CartCategory(
-          id: 'cat1',
-          name: 'Electrician',
-          icon: Icons.electrical_services,
-          bookingId: '#BC-98214',
-          items: [
-            CartItem(
-              id: 'item1',
-              name: 'Fan Installation',
-              price: 199,
-              time: '45 mins',
-              imagePath: 'assets/catogries/Electrician/fan.png',
-            ),
-            CartItem(
-              id: 'item2',
-              name: 'Light & Switch Installation',
-              price: 299,
-              time: '45 mins',
-              imagePath: 'assets/catogries/Electrician/socket.png',
-            ),
-          ],
-        ),
-      ];
-    } else {
-      _cartCategories = [
-        CartCategory(
-          id: 'cat1',
-          name: 'Salon for Women',
-          icon: Icons.face_retouching_natural,
-          bookingId: '#BC-98214',
-          items: [
-            CartItem(
-              id: 'item1',
-              name: 'Roll-on Waxing (Full arms, legs & underarm)',
-              price: 2299,
-            ),
-            CartItem(
-              id: 'item2',
-              name: 'Face & neck Bleach',
-              price: 199,
-            ),
-          ],
-        ),
-        CartCategory(
-          id: 'cat2',
-          name: 'Cleaning',
-          icon: Icons.cleaning_services_outlined,
-          bookingId: '#BC-98215',
-          items: [
-            CartItem(
-              id: 'item3',
-              name: 'Bathroom (Deep clean)',
-              price: 399,
-            ),
-            CartItem(
-              id: 'item4',
-              name: 'Washbasin Cleaning',
-              price: 99,
-            ),
-          ],
-        ),
-      ];
+    _fetchAddress();
+    CartState.fetchCart();
+  }
+
+  Future<void> _fetchAddress() async {
+    final addresses = await ApiService.getAddresses();
+    if (mounted && addresses.isNotEmpty) {
+      setState(() {
+        _currentAddress = addresses.first;
+      });
     }
+  }
+
+  Future<void> _updateQuantity(String subserviceId, int newQuantity) async {
+    setState(() => _isLoading = true);
+    Map<String, dynamic>? data;
+    if (newQuantity <= 0) {
+      data = await ApiService.removeFromCart(subserviceId);
+    } else {
+      data = await ApiService.updateCartItem(subserviceId, newQuantity);
+    }
+    
+    if (data != null) {
+      CartState.cartData.value = data;
+      CartState.updateCount(data);
+    }
+    setState(() => _isLoading = false);
   }
 
   void _navigateToSlotSelection() {
@@ -126,87 +56,104 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool isSingle = _cartCategories.length == 1;
-
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
-        child: Stack(
-          children: [
-            SingleChildScrollView(
-              padding: EdgeInsets.only(bottom: isSingle ? 100 : 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 20),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: _buildAddressCard(),
-                  ),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: _buildAccountDetails(),
-                  ),
-                  const SizedBox(height: 24),
-                  ..._cartCategories.map((category) => Padding(
+        child: ValueListenableBuilder<Map<String, dynamic>?>(
+          valueListenable: CartState.cartData,
+          builder: (context, cartData, child) {
+            final items = (cartData?['items'] as List<dynamic>?) ?? [];
+            final totalAmount = (cartData?['total_amount'] as num?)?.toDouble() ?? 0.0;
+            final isEmpty = items.isEmpty;
+
+            return Stack(
+              children: [
+                SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 100),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 20),
+                      Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                        child: _buildCategoryBlock(category, isSingle),
-                      )),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: _buildPeopleAlsoChoose(),
-                  ),
-                  const SizedBox(height: 32),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: _buildPaymentSummary(),
-                  ),
-                ],
-              ),
-            ),
-            if (isSingle)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, -4),
+                        child: _buildAddressCard(),
                       ),
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: _buildAccountDetails(),
+                      ),
+                      const SizedBox(height: 24),
+                      if (isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: Center(child: Text("Your cart is empty")),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: _buildCartItemsList(items),
+                        ),
+                      if (!isEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: _buildPeopleAlsoChoose(),
+                        ),
+                        const SizedBox(height: 32),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                          child: _buildPaymentSummary(items, totalAmount),
+                        ),
+                      ],
                     ],
                   ),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _navigateToSlotSelection,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1B1464),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                ),
+                if (!isEmpty)
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, -4),
+                          ),
+                        ],
                       ),
-                      child: const Text(
-                        'Select Slot',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : _navigateToSlotSelection,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1B1464),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: _isLoading 
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text(
+                            'Select Slot',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -252,13 +199,13 @@ class _CartScreenState extends State<CartScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'P and T Layout, Horama...',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                Text(
+                  _currentAddress?['area'] ?? 'Add an Address',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Bengaluru, Karnataka',
+                  _currentAddress != null ? '${_currentAddress!['city']}, ${_currentAddress!['state']}' : 'No address selected',
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                 ),
               ],
@@ -303,7 +250,7 @@ class _CartScreenState extends State<CartScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Madhu Sri, 9938920830',
+              'Account User',
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
           ],
@@ -312,7 +259,7 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildCategoryBlock(CartCategory category, bool isSingle) {
+  Widget _buildCartItemsList(List<dynamic> items) {
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
@@ -324,37 +271,30 @@ class _CartScreenState extends State<CartScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isSingle) ...[
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(8),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.home_repair_service, color: Colors.black87, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Services',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
                   ),
-                  child: Icon(category.icon, color: Colors.black87, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      category.name,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Booking ID: ${category.bookingId}',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-          ],
-          ...category.items.map((item) => _buildCartItem(item, isSingle)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ...items.map((item) => _buildCartItem(item)),
           const SizedBox(height: 16),
           Center(
             child: Row(
@@ -369,76 +309,33 @@ class _CartScreenState extends State<CartScreen> {
               ],
             ),
           ),
-          if (!isSingle) ...[
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _navigateToSlotSelection,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1B1464),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Select Slot',
-                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildCartItem(CartItem item, bool isSingle) {
+  Widget _buildCartItem(dynamic item) {
+    final subservice = item['subservice_id'];
+    if (subservice == null) return const SizedBox.shrink();
+
+    final title = subservice['subservice_name'] ?? 'Unknown Service';
+    final price = item['price_snapshot'] ?? subservice['base_price'] ?? 0;
+    final quantity = item['quantity'] ?? 1;
+    final subserviceId = subservice['_id'];
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (isSingle && item.imagePath != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                item.imagePath!,
-                width: 60,
-                height: 60,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  width: 60,
-                  height: 60,
-                  color: Colors.grey.shade200,
-                  child: const Icon(Icons.image, color: Colors.grey),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.name,
+                  title,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
                 ),
-                if (item.time != null) ...[
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.access_time, color: Colors.grey.shade500, size: 12),
-                      const SizedBox(width: 4),
-                      Text(
-                        item.time!,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),
@@ -447,7 +344,7 @@ class _CartScreenState extends State<CartScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '₹${item.price.toInt()}',
+                '₹${price.toInt()}',
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
               ),
               const SizedBox(height: 8),
@@ -463,9 +360,7 @@ class _CartScreenState extends State<CartScreen> {
                   children: [
                     InkWell(
                       onTap: () {
-                        setState(() {
-                          if (item.quantity > 1) item.quantity--;
-                        });
+                        if (!_isLoading) _updateQuantity(subserviceId, quantity - 1);
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8.0),
@@ -473,14 +368,12 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                     Text(
-                      '${item.quantity}',
+                      '$quantity',
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
                     ),
                     InkWell(
                       onTap: () {
-                        setState(() {
-                          item.quantity++;
-                        });
+                        if (!_isLoading) _updateQuantity(subserviceId, quantity + 1);
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8.0),
@@ -632,8 +525,9 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildPaymentSummary() {
-    bool isSingle = _cartCategories.length == 1;
+  Widget _buildPaymentSummary(List<dynamic> items, double itemTotal) {
+    double taxes = 0; // Keeping 0 for now as requested by user to use exact real data
+    double total = itemTotal + taxes;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -645,19 +539,7 @@ class _CartScreenState extends State<CartScreen> {
               'Payment Summary',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
-            if (!isSingle)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  'Includes Taxes & Fee',
-                  style: TextStyle(fontSize: 10, color: Colors.grey.shade600, fontWeight: FontWeight.w600),
-                ),
-              ),
-        ],
+          ],
         ),
         const SizedBox(height: 16),
         Container(
@@ -667,69 +549,21 @@ class _CartScreenState extends State<CartScreen> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.grey.shade200),
           ),
-          child: isSingle ? _buildSinglePaymentDetails() : _buildMultiPaymentDetails(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSinglePaymentDetails() {
-    double itemTotal = _cartCategories[0].items.fold(0, (sum, item) => sum + (item.price * item.quantity));
-    double taxes = 22; // Hardcoded dummy tax to match image
-    double total = itemTotal + taxes;
-
-    return Column(
-      children: [
-        _buildPaymentRow('Items Total', '₹${itemTotal.toInt()}'),
-        const SizedBox(height: 12),
-        _buildPaymentRow('Taxes and Fee', '₹${taxes.toInt()}'),
-        const SizedBox(height: 16),
-        const Divider(),
-        const SizedBox(height: 16),
-        _buildPaymentRow('Total Amount', '₹${total.toInt()}', isBold: true),
-        const SizedBox(height: 16),
-        _buildPaymentRow('Amount to Pay', '₹${total.toInt()}', isBold: true),
-      ],
-    );
-  }
-
-  Widget _buildMultiPaymentDetails() {
-    List<Widget> rows = [];
-
-    for (var cat in _cartCategories) {
-      double catTotal = cat.items.fold(0, (sum, item) => sum + (item.price * item.quantity));
-      
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12.0),
-          child: Text(
-            cat.name,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+          child: Column(
+            children: [
+              _buildPaymentRow('Items Total', '₹${itemTotal.toInt()}'),
+              const SizedBox(height: 12),
+              _buildPaymentRow('Taxes and Fee', '₹${taxes.toInt()}'),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 16),
+              _buildPaymentRow('Total Amount', '₹${total.toInt()}', isBold: true),
+              const SizedBox(height: 16),
+              _buildPaymentRow('Amount to Pay', '₹${total.toInt()}', isBold: true),
+            ],
           ),
         ),
-      );
-
-      for (var item in cat.items) {
-        rows.add(
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: _buildPaymentRow(item.name, '₹${(item.price * item.quantity).toInt()}'),
-          ),
-        );
-      }
-
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.only(top: 8.0, bottom: 16.0),
-          child: _buildPaymentRow('Total Amount', '₹${catTotal.toInt()}', isBold: true),
-        ),
-      );
-    }
-
-    // Since taxes were "included" in the multi category design text
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: rows,
+      ],
     );
   }
 

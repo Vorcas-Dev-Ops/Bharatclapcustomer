@@ -2,51 +2,136 @@ import 'package:flutter/material.dart';
 import '../auth/login_screen.dart';
 import '../../services/api_service.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  Map<String, dynamic>? _userProfile;
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    try {
+      final profile = await ApiService.getUserProfile();
+      if (mounted) {
+        setState(() {
+          _userProfile = profile;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFC),
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 24),
-                const Text(
-                  'My Profile',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B1464)),
                 ),
-                const SizedBox(height: 24),
-                _buildProfileCard(),
-                const SizedBox(height: 16),
-                _buildStatsRow(),
-                const SizedBox(height: 32),
-                _buildSectionHeader('MY ACTIVITY'),
-                const SizedBox(height: 12),
-                _buildActivityCard(),
-                const SizedBox(height: 32),
-                _buildSectionHeader('ACCOUNT'),
-                const SizedBox(height: 12),
-                _buildAccountCard(context),
-                const SizedBox(height: 32),
-              ],
-            ),
-          ),
-        ),
+              )
+            : _errorMessage != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Failed to load profile details.',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _isLoading = true;
+                                _errorMessage = null;
+                              });
+                              _loadUserProfile();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF1B1464),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 24),
+                          const Text(
+                            'My Profile',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          _buildProfileCard(),
+                          const SizedBox(height: 16),
+                          _buildStatsRow(),
+                          const SizedBox(height: 32),
+                          _buildSectionHeader('MY ACTIVITY'),
+                          const SizedBox(height: 12),
+                          _buildActivityCard(),
+                          const SizedBox(height: 32),
+                          _buildSectionHeader('ACCOUNT'),
+                          const SizedBox(height: 12),
+                          _buildAccountCard(context),
+                          const SizedBox(height: 32),
+                        ],
+                      ),
+                    ),
+                  ),
       ),
     );
   }
 
   Widget _buildProfileCard() {
+    final name = _userProfile?['name'] ?? 'Guest User';
+    final phone = _userProfile?['phone'] ?? 'No Phone';
+    final email = _userProfile?['email'] ?? 'No Email';
+    final profileImage = _userProfile?['profile_image'];
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -59,15 +144,20 @@ class ProfileScreen extends StatelessWidget {
         children: [
           Column(
             children: [
-              const CircleAvatar(
+              CircleAvatar(
                 radius: 40,
-                backgroundImage: AssetImage('assets/images/profile_placeholder.png'), // Will add a placeholder or let it fail gracefully
-                backgroundColor: Color(0xFFE8E8FF),
+                backgroundImage: (profileImage != null && profileImage.isNotEmpty)
+                    ? NetworkImage(profileImage) as ImageProvider
+                    : null,
+                backgroundColor: const Color(0xFFE8E8FF),
+                child: (profileImage == null || profileImage.isEmpty)
+                    ? const Icon(Icons.person, size: 40, color: Color(0xFF1B1464))
+                    : null,
               ),
               const SizedBox(height: 16),
-              const Text(
-                'Madhu Sri',
-                style: TextStyle(
+              Text(
+                name,
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF1B1464),
@@ -77,9 +167,11 @@ class ProfileScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildContactPill(Icons.phone_outlined, '8912451212'),
-                  const SizedBox(width: 12),
-                  _buildContactPill(Icons.email_outlined, 'madhusri@gmail.com'),
+                  _buildContactPill(Icons.phone_outlined, phone),
+                  if (email.isNotEmpty && email != 'No Email') ...[
+                    const SizedBox(width: 12),
+                    _buildContactPill(Icons.email_outlined, email),
+                  ],
                 ],
               ),
             ],
@@ -239,30 +331,30 @@ class ProfileScreen extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: bgColor,
-              borderRadius: BorderRadius.circular(12),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 20),
             ),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
-                color: isDestructive ? color : Colors.black87,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  color: isDestructive ? color : Colors.black87,
+                ),
               ),
             ),
-          ),
-          if (!hideChevron)
-            Icon(Icons.chevron_right, color: isDestructive ? color.withOpacity(0.5) : Colors.grey.shade400, size: 20),
-        ],
-      ),
+            if (!hideChevron)
+              Icon(Icons.chevron_right, color: isDestructive ? color.withOpacity(0.5) : Colors.grey.shade400, size: 20),
+          ],
+        ),
       ),
     );
   }

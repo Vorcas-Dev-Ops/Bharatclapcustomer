@@ -3,6 +3,7 @@ import 'services_screen.dart';
 import 'beauty_services_screen.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
+import '../../providers/cart_state.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -101,7 +102,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     color: Color(0xFF1B1464),
                     shape: BoxShape.circle,
                   ),
-                  child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: CartState.cartItemCount,
+                    builder: (context, count, child) {
+                      if (count == 0) return const SizedBox.shrink();
+                      return Text(
+                        '$count', 
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -191,7 +201,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
     return GestureDetector(
       onTap: () {
-        if (title.toLowerCase().contains('beauty')) {
+        if (data['requiresGenderSelection'] == true) {
           _showMenWomenDialog(context, data['_id'], title);
         } else {
           Navigator.push(

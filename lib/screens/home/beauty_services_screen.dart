@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
+import '../../providers/cart_state.dart';
 
 class BeautyServicesScreen extends StatefulWidget {
   final String categoryId;
@@ -25,37 +26,77 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
   int _selectedFilterIndex = 1; // 1 represents 'All'
 
   List<Map<String, dynamic>> _filters = [];
+  Map<String, dynamic>? _currentAddress;
 
   @override
   void initState() {
     super.initState();
-    if (widget.gender == 'Men') {
-      _filters = [
-        {'icon': Icons.bolt, 'title': 'Instant', 'isInstant': true},
-        {'icon': Icons.business, 'title': 'All', 'isInstant': false},
-        {'icon': Icons.spa, 'title': 'Spa', 'isInstant': false},
-        {'icon': Icons.content_cut, 'title': 'Hair Salon', 'isInstant': false},
-      ];
-    } else {
-      _filters = [
-        {'icon': Icons.bolt, 'title': 'Instant', 'isInstant': true},
-        {'icon': Icons.business, 'title': 'All', 'isInstant': false},
-        {'icon': Icons.spa, 'title': 'Spa', 'isInstant': false},
-        {'icon': Icons.face_retouching_natural, 'title': 'Salon', 'isInstant': false},
-        {'icon': Icons.content_cut, 'title': 'Hair cut', 'isInstant': false},
-        {'icon': Icons.brush, 'title': 'Makeup', 'isInstant': false},
-      ];
-    }
+    _fetchAddress();
     _fetchServices();
+  }
+
+  IconData _getIconForService(String name) {
+    final lowerName = name.toLowerCase();
+    if (lowerName.contains('spa')) return Icons.spa;
+    if (lowerName.contains('hair') || lowerName.contains('cut')) return Icons.content_cut;
+    if (lowerName.contains('makeup')) return Icons.brush;
+    if (lowerName.contains('massage')) return Icons.self_improvement;
+    if (lowerName.contains('facial') || lowerName.contains('salon')) return Icons.face_retouching_natural;
+    return Icons.business;
+  }
+
+  Future<void> _fetchAddress() async {
+    final addresses = await ApiService.getAddresses();
+    if (mounted && addresses.isNotEmpty) {
+      setState(() {
+        _currentAddress = addresses.first;
+      });
+    }
   }
 
   Future<void> _fetchServices() async {
     setState(() => _isLoading = true);
     try {
-      final subServices = await ApiService.getSubServicesByCategory(widget.categoryId);
+      // 1. Fetch all Services for this category
+      final allServices = await ApiService.getServices(widget.categoryId);
+      
+      // Filter locally for gender applicability (allow matching gender, or if it's missing/unisex)
+      final services = allServices.where((s) {
+        final g = (s['genderApplicability'] ?? '').toString().toLowerCase();
+        return g.isEmpty || g == 'unisex' || g == 'both' || g == widget.gender.toLowerCase();
+      }).toList();
+
+      final validServiceIds = services.map((s) => s['_id'].toString()).toSet();
+
+      // 2. Fetch all SubServices for this category
+      final allSubServices = await ApiService.getSubServicesByCategory(widget.categoryId);
+      
+      // 3. Filter SubServices to only include those belonging to the valid services
+      final filteredSubServices = allSubServices.where((subService) {
+        final serviceInfo = subService['service_id'];
+        if (serviceInfo == null) return false;
+        final serviceId = serviceInfo is Map ? serviceInfo['_id'].toString() : serviceInfo.toString();
+        return validServiceIds.contains(serviceId);
+      }).toList();
+
+      final List<Map<String, dynamic>> newFilters = [
+        {'icon': Icons.bolt, 'title': 'Instant', 'isInstant': true},
+        {'icon': Icons.business, 'title': 'All', 'isInstant': false},
+      ];
+      for (var service in services) {
+        final title = service['service_name']?.toString() ?? 'Unknown';
+        newFilters.add({
+          'icon': _getIconForService(title),
+          'title': title,
+          'isInstant': false,
+          'id': service['_id'].toString(),
+        });
+      }
+
       if (mounted) {
         setState(() {
-          _services = subServices;
+          _services = filteredSubServices;
+          _filters = newFilters;
           _isLoading = false;
         });
       }
@@ -116,11 +157,29 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
       ];
     }
     
-    // If we have real data, filter it by search query
-    return _services.where((s) {
-      final title = (s['title'] ?? '').toLowerCase();
+    // Filter by search query and selected category tab
+    var result = _services.where((s) {
+      final title = (s['title'] ?? s['subservice_name'] ?? '').toLowerCase();
       return title.contains(_searchQuery.toLowerCase());
     }).toList();
+
+    if (_selectedFilterIndex > 0 && _selectedFilterIndex < _filters.length) {
+      final selectedFilter = _filters[_selectedFilterIndex];
+      final filterTitle = selectedFilter['title'].toString().toLowerCase();
+      if (filterTitle != 'all') {
+         result = result.where((s) {
+            if (selectedFilter.containsKey('id')) {
+              final serviceInfo = s['service_id'];
+              final serviceId = serviceInfo is Map ? serviceInfo['_id'].toString() : serviceInfo.toString();
+              return serviceId == selectedFilter['id'];
+            }
+            final title = (s['title'] ?? s['subservice_name'] ?? '').toLowerCase();
+            final desc = (s['description'] ?? '').toLowerCase();
+            return title.contains(filterTitle) || desc.contains(filterTitle);
+         }).toList();
+      }
+    }
+    return result;
   }
 
   @override
@@ -134,9 +193,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
             _buildSearchBar(),
             _buildFiltersRow(),
             Expanded(
-              child: (_selectedFilterIndex == 0 || _selectedFilterIndex == 1) 
-                  ? _buildServiceList() 
-                  : _buildGroupedView(),
+              child: _buildServiceList(),
             ),
           ],
         ),
@@ -197,7 +254,16 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                       color: Color(0xFF1B1464),
                       shape: BoxShape.circle,
                     ),
-                    child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: CartState.cartItemCount,
+                      builder: (context, count, child) {
+                        if (count == 0) return const SizedBox.shrink();
+                        return Text(
+                          '$count', 
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                        );
+                      },
+                    ),
                   ),
                 ),
               ],
@@ -297,7 +363,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
   }
 
   Widget _buildServiceCard(dynamic service) {
-    String title = service['title'] ?? 'Unknown Service';
+    String title = service['title'] ?? service['subservice_name'] ?? 'Unknown Service';
     String rating = service['rating']?.toString() ?? '4.8';
     String time = service['time']?.toString() ?? '45 mins';
     int price = service['base_price'] ?? 0;
@@ -405,19 +471,52 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                         color: Color(0xFF1B1464),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'Add',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1B1464),
+                    InkWell(
+                      onTap: () async {
+                        final subserviceId = service['_id'];
+                        if (subserviceId != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Adding $title to cart...')),
+                          );
+                          final data = await ApiService.addToCart(
+                            subserviceId, 
+                            1, 
+                            _currentAddress?['_id'], 
+                            _currentAddress?['area'] ?? _currentAddress?['city']
+                          );
+                          if (data != null) {
+                            CartState.cartData.value = data;
+                            CartState.updateCount(data);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('$title added to cart!')),
+                              );
+                            }
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Failed to add to cart.')),
+                              );
+                            }
+                          }
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Add',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1B1464),
+                          ),
                         ),
                       ),
                     ),

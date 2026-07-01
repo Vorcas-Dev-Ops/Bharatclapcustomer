@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'service_details_screen.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
+import '../../providers/cart_state.dart';
 
 class ServicesScreen extends StatefulWidget {
   final String? categoryId;
@@ -24,11 +25,22 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   List<_ServiceItem> _services = [];
   List<_ServiceItem> _allSubServices = [];
+  Map<String, dynamic>? _currentAddress;
 
   @override
   void initState() {
     super.initState();
+    _fetchAddress();
     _fetchData();
+  }
+
+  Future<void> _fetchAddress() async {
+    final addresses = await ApiService.getAddresses();
+    if (mounted && addresses.isNotEmpty) {
+      setState(() {
+        _currentAddress = addresses.first;
+      });
+    }
   }
 
   Future<void> _fetchData() async {
@@ -308,7 +320,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     color: Color(0xFF1B1464),
                     shape: BoxShape.circle,
                   ),
-                  child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  child: ValueListenableBuilder<int>(
+                    valueListenable: CartState.cartItemCount,
+                    builder: (context, count, child) {
+                      if (count == 0) return const SizedBox.shrink();
+                      return Text(
+                        '$count', 
+                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -567,7 +588,36 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     SizedBox(
                       height: 32,
                       child: OutlinedButton(
-                        onPressed: () {},
+                        onPressed: () async {
+                          if (service.subserviceId != null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Adding ${service.title} to cart...')),
+                            );
+                            final data = await ApiService.addToCart(
+                              service.subserviceId!, 
+                              1, 
+                              _currentAddress?['_id'], 
+                              _currentAddress?['area'] ?? _currentAddress?['city']
+                            );
+                            if (data != null) {
+                              CartState.cartData.value = data;
+                              CartState.updateCount(data);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('${service.title} added to cart!')),
+                                );
+                              }
+                            } else {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Failed to add to cart.')),
+                                );
+                              }
+                            }
+                          }
+                        },
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           side: BorderSide(color: Colors.grey.shade300),

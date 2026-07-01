@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
+import '../../providers/cart_state.dart';
 
 class ServiceDetailsScreen extends StatefulWidget {
   final String? subserviceId;
@@ -31,11 +32,22 @@ class ServiceDetailsScreen extends StatefulWidget {
 class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
   List<dynamic> _relatedServices = [];
   bool _isLoadingRelated = true;
+  Map<String, dynamic>? _currentAddress;
 
   @override
   void initState() {
     super.initState();
+    _fetchAddress();
     _fetchRelatedServices();
+  }
+
+  Future<void> _fetchAddress() async {
+    final addresses = await ApiService.getAddresses();
+    if (mounted && addresses.isNotEmpty) {
+      setState(() {
+        _currentAddress = addresses.first;
+      });
+    }
   }
 
   Future<void> _fetchRelatedServices() async {
@@ -131,18 +143,27 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                 ),
                 child: const Icon(Icons.shopping_cart_outlined, color: Color(0xFF1B1464)),
               ),
-              Positioned(
-                right: -2,
-                top: -2,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF1B1464),
-                    shape: BoxShape.circle,
+                Positioned(
+                  right: -2,
+                  top: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF1B1464),
+                      shape: BoxShape.circle,
+                    ),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: CartState.cartItemCount,
+                      builder: (context, count, child) {
+                        if (count == 0) return const SizedBox.shrink();
+                        return Text(
+                          '$count', 
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                        );
+                      },
+                    ),
                   ),
-                  child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                 ),
-              ),
             ],
           ),
         ),
@@ -244,32 +265,48 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                       color: Color(0xFF1B1464),
                     ),
                   ),
-                  Container(
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFE8E8FF), width: 1.5),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        InkWell(
-                          onTap: () {},
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Icon(Icons.remove, size: 18, color: Color(0xFF1B1464)),
-                          ),
-                        ),
-                        const Text('1', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
-                        InkWell(
-                          onTap: () {},
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Icon(Icons.add, size: 18, color: Color(0xFF1B1464)),
-                          ),
-                        ),
-                      ],
+                  InkWell(
+                    onTap: () async {
+                      if (widget.subserviceId != null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Adding ${widget.title} to cart...')),
+                        );
+                        final data = await ApiService.addToCart(
+                          widget.subserviceId!, 
+                          1, 
+                          _currentAddress?['_id'], 
+                          _currentAddress?['area'] ?? _currentAddress?['city']
+                        );
+                        if (data != null) {
+                          CartState.cartData.value = data;
+                          CartState.updateCount(data);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('${widget.title} added to cart!')),
+                            );
+                          }
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Failed to add to cart.')),
+                            );
+                          }
+                        }
+                      }
+                    },
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE8E8FF), width: 1.5),
+                      ),
+                      child: const Center(
+                        child: Text('Add to Cart', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
+                      ),
                     ),
                   ),
                 ],
@@ -464,13 +501,21 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFE8E8FF), width: 1.2),
-                        borderRadius: BorderRadius.circular(8),
+                    InkWell(
+                      onTap: () async {
+                        // Assuming subserviceId is passed or available, but here we don't have it easily.
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Please select this service from the main list to add to cart.')),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFFE8E8FF), width: 1.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
                       ),
-                      child: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
                     ),
                   ],
                 ),

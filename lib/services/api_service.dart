@@ -146,6 +146,32 @@ class ApiService {
     }
   }
 
+  // Get Addresses
+  static Future<List<dynamic>> getAddresses() async {
+    try {
+      final token = await getToken();
+      if (token == null) return [];
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/address'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data;
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   // Get User Profile
   static Future<Map<String, dynamic>?> getUserProfile() async {
     try {
@@ -176,7 +202,7 @@ class ApiService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
-          return data;
+          return data.where((item) => item['status'] == 'active').toList();
         }
       }
       return [];
@@ -186,13 +212,17 @@ class ApiService {
   }
 
   // Get Services by Category
-  static Future<List<dynamic>> getServices(String categoryId) async {
+  static Future<List<dynamic>> getServices(String categoryId, {String? gender}) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/services?category_id=$categoryId'));
+      String url = '$baseUrl/services?category_id=$categoryId';
+      if (gender != null) {
+        url += '&gender=${gender.toLowerCase()}';
+      }
+      final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
-          return data;
+          return data.where((item) => item['status'] == 'active').toList();
         }
       }
       return [];
@@ -208,12 +238,127 @@ class ApiService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
-          return data;
+          return data.where((item) => item['status'] == 'active').toList();
         }
       }
       return [];
     } catch (e) {
       return [];
+    }
+  }
+
+  // Cart APIs
+  static Future<Map<String, dynamic>?> getCart() async {
+    try {
+      final token = await getToken();
+      if (token == null) return null;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/cart'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> addToCart(String subserviceId, int quantity, String? locationId, String? locationName) async {
+    try {
+      final token = await getToken();
+      if (token == null) return null;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/cart/add'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'subservice_id': subserviceId,
+          'quantity': quantity,
+          if (locationId != null) 'location_id': locationId,
+          if (locationName != null) 'location_name': locationName,
+        }),
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      }
+      debugPrint('Failed to add to cart: ${response.statusCode} - ${response.body}');
+      return null;
+    } catch (e) {
+      debugPrint('Exception in addToCart: $e');
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> updateCartItem(String subserviceId, int quantity) async {
+    try {
+      final token = await getToken();
+      if (token == null) return null;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/cart/update'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'subservice_id': subserviceId,
+          'quantity': quantity,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> removeFromCart(String subserviceId) async {
+    try {
+      final token = await getToken();
+      if (token == null) return null;
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/cart/item/$subserviceId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<bool> clearCart() async {
+    try {
+      final token = await getToken();
+      if (token == null) return false;
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/cart'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
     }
   }
 }
