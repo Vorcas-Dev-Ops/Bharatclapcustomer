@@ -20,6 +20,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   List<dynamic> _apiCategories = [];
+  List<dynamic> _apiBanners = [];
+  List<dynamic> _apiPopularServices = [];
+  List<dynamic> _apiRecentBookings = [];
   Map<String, dynamic>? _currentAddress;
 
   @override
@@ -27,6 +30,36 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _fetchCategories();
     _fetchAddress();
+    _fetchBanners();
+    _fetchPopularServices();
+    _fetchRecentBookings();
+  }
+
+  Future<void> _fetchRecentBookings() async {
+    final bookings = await ApiService.getMyBookings();
+    if (mounted) {
+      setState(() {
+        _apiRecentBookings = bookings;
+      });
+    }
+  }
+
+  Future<void> _fetchPopularServices() async {
+    final services = await ApiService.getPopularServices();
+    if (mounted) {
+      setState(() {
+        _apiPopularServices = services;
+      });
+    }
+  }
+
+  Future<void> _fetchBanners() async {
+    final banners = await ApiService.getBanners();
+    if (mounted) {
+      setState(() {
+        _apiBanners = banners;
+      });
+    }
   }
 
   Future<void> _fetchAddress() async {
@@ -82,34 +115,50 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _refreshHome() async {
+    await Future.wait([
+      _fetchCategories(),
+      _fetchAddress(),
+      _fetchBanners(),
+      _fetchPopularServices(),
+      _fetchRecentBookings(),
+    ]);
+  }
+
   Widget _buildHomeTab() {
     return SafeArea(
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              _buildHeader(),
-              const SizedBox(height: 24),
-              _buildSearchBar(),
-              const SizedBox(height: 32),
-              _buildCategoriesHeader(),
-              const SizedBox(height: 16),
-              _buildCategories(),
-              const SizedBox(height: 32),
-              _buildPopularServicesHeader(),
-              const SizedBox(height: 16),
-              _buildPopularServices(),
-              const SizedBox(height: 32),
-              _buildPromoBanner(),
-              const SizedBox(height: 32),
-              _buildRecentBookingsHeader(),
-              const SizedBox(height: 16),
-              _buildRecentBookings(),
-              const SizedBox(height: 32),
-            ],
+      child: RefreshIndicator(
+        onRefresh: _refreshHome,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 16),
+                _buildHeader(),
+                const SizedBox(height: 24),
+                _buildSearchBar(),
+                const SizedBox(height: 32),
+                _buildCategoriesHeader(),
+                const SizedBox(height: 16),
+                _buildCategories(),
+                const SizedBox(height: 32),
+                _buildPopularServicesHeader(),
+                const SizedBox(height: 16),
+                _buildPopularServices(),
+                const SizedBox(height: 32),
+                _buildPromoBanner(),
+                const SizedBox(height: 32),
+                if (_apiRecentBookings.isNotEmpty) ...[
+                  _buildRecentBookingsHeader(),
+                  const SizedBox(height: 16),
+                  _buildRecentBookings(),
+                  const SizedBox(height: 32),
+                ],
+              ],
+            ),
           ),
         ),
       ),
@@ -236,15 +285,55 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildCategories() {
+    List<Widget> categoryWidgets = [];
+    
+    categoryWidgets.add(_buildCategoryItem('Instant', Icons.bolt, null, 'Instant'));
+
+    Set<String> usedCategoryIds = {};
+
+    bool tryAddCategory(String keyword, String defaultTitle, IconData defaultIcon) {
+      String? id = _getCategoryId(keyword);
+      if (id != null) {
+        usedCategoryIds.add(id);
+        categoryWidgets.add(_buildCategoryItem(defaultTitle, defaultIcon, id, defaultTitle.replaceAll('\n', ' ')));
+        return true;
+      }
+      return false;
+    }
+
+    bool hasClean = tryAddCategory('clean', 'Cleaning\n& Pest', Icons.cleaning_services_outlined);
+    bool hasWomen = tryAddCategory('beauty', 'Womens\nSalon', Icons.face_retouching_natural);
+    bool hasMen = tryAddCategory('beauty', 'Mens\nSalon', Icons.content_cut);
+
+    int missingCount = 3 - (hasClean ? 1 : 0) - (hasWomen ? 1 : 0) - (hasMen ? 1 : 0);
+    
+    if (missingCount > 0) {
+      for (var cat in _apiCategories) {
+        String id = cat['_id'];
+        if (!usedCategoryIds.contains(id)) {
+          String name = cat['category_name'] ?? 'Category';
+          String displayName = name;
+          if (displayName.length > 10 && displayName.contains(' ')) {
+            displayName = displayName.replaceFirst(' ', '\n');
+          }
+          categoryWidgets.add(_buildCategoryItem(displayName, Icons.category_outlined, id, name));
+          usedCategoryIds.add(id);
+          missingCount--;
+          if (missingCount == 0) break;
+        }
+      }
+    }
+
+    // If there are still missing spots and not enough categories, just pad with empty space
+    while (missingCount > 0) {
+      categoryWidgets.add(const SizedBox(width: 65));
+      missingCount--;
+    }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildCategoryItem('Instant', Icons.bolt, null, 'Instant'),
-        _buildCategoryItem('Cleaning\n& Pest', Icons.cleaning_services_outlined, _getCategoryId('clean'), 'Cleaning & Pest Control'),
-        _buildCategoryItem('Womens\nSalon', Icons.face_retouching_natural, _getCategoryId('women'), 'Womens Salon'),
-        _buildCategoryItem('Mens\nSalon', Icons.content_cut, _getCategoryId('men'), 'Mens Salon'),
-      ],
+      children: categoryWidgets,
     );
   }
 
@@ -328,21 +417,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildPopularServices() {
+    if (_apiPopularServices.isEmpty) {
+      return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+    }
+
     return SizedBox(
       height: 200,
-      child: ListView(
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
-        children: [
-          _buildServiceCard('Full Home Repair', '4.8', '₹499', 'assets/images/service_repair.png'),
-          const SizedBox(width: 16),
-          _buildServiceCard('Premium Painting', '4.9', '₹2999', 'assets/images/service_painting.png'),
-        ],
+        itemCount: _apiPopularServices.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 16),
+        itemBuilder: (context, index) {
+          final service = _apiPopularServices[index];
+          String title = service['service_name'] ?? 'Service';
+          String rating = (service['avg_rating'] ?? 0.0).toString();
+          String price = '₹${service['base_price'] ?? 0}';
+          
+          String? imageUrl = service['image'] as String?;
+          if (imageUrl == null || imageUrl.isEmpty) {
+            if (service['images'] != null && service['images'].isNotEmpty) {
+              imageUrl = service['images'][0];
+            }
+          }
+          
+          String imagePath = (imageUrl != null && imageUrl.isNotEmpty) 
+              ? imageUrl 
+              : 'assets/images/service_repair.png';
+          
+          return _buildServiceCard(title, rating, price, imagePath);
+        },
       ),
     );
   }
 
   Widget _buildServiceCard(String title, String rating, String price, String imagePath) {
+    bool isNetwork = imagePath.startsWith('http');
     return Container(
       width: 160,
       decoration: BoxDecoration(
@@ -355,7 +465,9 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.asset(imagePath, height: 110, width: double.infinity, fit: BoxFit.cover),
+            child: isNetwork 
+                ? Image.network(imagePath, height: 110, width: double.infinity, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 110, color: Colors.grey.shade200))
+                : Image.asset(imagePath, height: 110, width: double.infinity, fit: BoxFit.cover),
           ),
           Padding(
             padding: const EdgeInsets.all(12.0),
@@ -382,9 +494,33 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildPromoBanner() {
+    if (_apiBanners.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        children: _apiBanners.asMap().entries.map((entry) {
+          final isLast = entry.key == _apiBanners.length - 1;
+          return Padding(
+            padding: EdgeInsets.only(right: isLast ? 0 : 16.0),
+            child: _buildBannerItem(entry.value),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBannerItem(dynamic banner) {
+    final title = banner['title'] ?? 'Get 30% Off on\nDeep Cleaning';
+    final subtitle = banner['subtitle'] ?? 'Flash Sale';
+    final buttonText = banner['button_text'] ?? 'Book Now >';
+    final imageUrl = banner['image_url'];
+
     return Container(
-      width: double.infinity,
+      width: MediaQuery.of(context).size.width - 40,
       padding: const EdgeInsets.all(20),
+      clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
         color: const Color(0xFF1B1464),
         borderRadius: BorderRadius.circular(20),
@@ -392,41 +528,71 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Stack(
         children: [
           // Background illustration image
-          Positioned(
-            right: -20,
-            bottom: -20,
-            child: Opacity(
-              opacity: 0.8,
-              child: Image.asset(
-                'assets/images/promo_banner.png',
-                height: 120,
-                width: 120,
-                fit: BoxFit.cover,
+          if (imageUrl != null && imageUrl.toString().isNotEmpty)
+            Positioned(
+              right: -20,
+              bottom: -20,
+              child: Opacity(
+                opacity: 0.8,
+                child: Image.network(
+                  imageUrl,
+                  height: 120,
+                  width: 120,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Image.asset(
+                    'assets/images/promo_banner.png',
+                    height: 120,
+                    width: 120,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+            )
+          else
+            Positioned(
+              right: -20,
+              bottom: -20,
+              child: Opacity(
+                opacity: 0.8,
+                child: Image.asset(
+                  'assets/images/promo_banner.png',
+                  height: 120,
+                  width: 120,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
-          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
+              if (subtitle.toString().isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(subtitle, style: const TextStyle(color: Colors.white, fontSize: 12)),
                 ),
-                child: const Text('Flash Sale', style: TextStyle(color: Colors.white, fontSize: 12)),
+              if (subtitle.toString().isNotEmpty)
+                const SizedBox(height: 12),
+              Text(
+                title, 
+                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.2),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 12),
-              const Text('Get 30% Off on\nDeep Cleaning', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.2)),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  // Navigation can be handled based on redirect_type
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: const Color(0xFF1B1464),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                child: const Text('Book Now >', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -441,11 +607,40 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildRecentBookings() {
     return Column(
-      children: [
-        _buildBookingCard('Kitchen Cleaning', '12 Oct, 10:30 AM', 'Rajesh K.', '4.8', Icons.water_drop_outlined),
-        const SizedBox(height: 12),
-        _buildBookingCard('TV Wall Mounting', '05 Oct, 02:00 PM', 'Amit S.', '4.2', Icons.tv),
-      ],
+      children: _apiRecentBookings.map((booking) {
+        String title = 'Service';
+        if (booking['subservice_id'] != null && booking['subservice_id']['subservice_name'] != null) {
+          title = booking['subservice_id']['subservice_name'];
+        } else if (booking['variant_name'] != null) {
+          title = booking['variant_name'];
+        }
+        
+        String dateStr = '';
+        if (booking['scheduled_at'] != null) {
+          DateTime dt = DateTime.parse(booking['scheduled_at']).toLocal();
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          String month = months[dt.month - 1];
+          String hr = (dt.hour % 12 == 0 ? 12 : dt.hour % 12).toString().padLeft(2, '0');
+          String min = dt.minute.toString().padLeft(2, '0');
+          String amPm = dt.hour >= 12 ? 'PM' : 'AM';
+          dateStr = '${dt.day.toString().padLeft(2, '0')} $month, $hr:$min $amPm';
+        }
+        
+        String byStr = 'Pending Assignment';
+        if (booking['provider_id'] != null && booking['provider_id']['user_id'] != null) {
+          byStr = booking['provider_id']['user_id']['name'] ?? 'Provider';
+        }
+        
+        String rating = '0.0';
+        if (booking['provider_id'] != null && booking['provider_id']['rating'] != null) {
+          rating = booking['provider_id']['rating'].toString();
+        }
+        
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12.0),
+          child: _buildBookingCard(title, dateStr, byStr, rating, Icons.design_services),
+        );
+      }).toList(),
     );
   }
 

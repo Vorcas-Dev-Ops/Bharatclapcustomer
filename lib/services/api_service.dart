@@ -195,6 +195,59 @@ class ApiService {
     }
   }
 
+  // Get Popular Services
+  static Future<List<dynamic>> getPopularServices() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/services'));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          var activeServices = data.where((item) => item['status'] == 'active').toList();
+          
+          // Sort by total_reviews descending, then avg_rating descending
+          activeServices.sort((a, b) {
+            int reviewsA = (a['total_reviews'] ?? 0);
+            int reviewsB = (b['total_reviews'] ?? 0);
+            if (reviewsA != reviewsB) return reviewsB.compareTo(reviewsA);
+            
+            num ratingA = (a['avg_rating'] ?? 0);
+            num ratingB = (b['avg_rating'] ?? 0);
+            return ratingB.compareTo(ratingA);
+          });
+
+          // Check if all active services have 0 reviews
+          bool noReviews = activeServices.every((item) => (item['total_reviews'] ?? 0) == 0);
+          
+          if (noReviews && activeServices.isNotEmpty) {
+            // Shuffle to show random services if no reviews are present
+            activeServices.shuffle();
+          }
+
+          return activeServices.take(5).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Get Banners
+  static Future<List<dynamic>> getBanners() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/banners'));
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data.where((item) => item['status'] == 'active').toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   // Get Categories
   static Future<List<dynamic>> getCategories() async {
     try {
@@ -247,6 +300,55 @@ class ApiService {
     }
   }
 
+  // Get My Bookings
+  static Future<List<dynamic>> getMyBookings({int limit = 100, int page = 1}) async {
+    try {
+      final token = await getToken();
+      if (token == null) return [];
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/bookings/my?limit=$limit&page=$page'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['data'] is List) {
+          return data['data'];
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // Get Booking By ID
+  static Future<Map<String, dynamic>?> getBookingById(String bookingId) async {
+    try {
+      final token = await getToken();
+      if (token == null) return null;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/bookings/$bookingId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // Cart APIs
   static Future<Map<String, dynamic>?> getCart() async {
     try {
@@ -272,7 +374,7 @@ class ApiService {
   static Future<Map<String, dynamic>?> addToCart(String subserviceId, int quantity, String? locationId, String? locationName) async {
     try {
       final token = await getToken();
-      if (token == null) return null;
+      if (token == null) return {'success': false, 'message': 'Please login first'};
 
       final response = await http.post(
         Uri.parse('$baseUrl/cart/add'),
@@ -287,14 +389,19 @@ class ApiService {
           if (locationName != null) 'location_name': locationName,
         }),
       );
+      
+      final data = jsonDecode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return jsonDecode(response.body);
+        data['success'] = true;
+        return data;
+      } else {
+        debugPrint('Failed to add to cart: ${response.statusCode} - ${response.body}');
+        data['success'] = false;
+        return data;
       }
-      debugPrint('Failed to add to cart: ${response.statusCode} - ${response.body}');
-      return null;
     } catch (e) {
       debugPrint('Exception in addToCart: $e');
-      return null;
+      return {'success': false, 'message': 'An error occurred'};
     }
   }
 
@@ -359,6 +466,64 @@ class ApiService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  // Update Slot for Cart Item
+  static Future<Map<String, dynamic>?> updateSlot(String subserviceId, String selectedDate, String selectedTimeSlot) async {
+    try {
+      final token = await getToken();
+      if (token == null) return null;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/cart/slot'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'subservice_id': subserviceId,
+          'selected_date': selectedDate,
+          'selected_time_slot': selectedTimeSlot,
+        }),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Checkout / Create Booking
+  static Future<Map<String, dynamic>?> createBooking(String addressId, String paymentMethod, {String? couponCode}) async {
+    try {
+      final token = await getToken();
+      if (token == null) return null;
+
+      final Map<String, dynamic> body = {
+        'address': addressId,
+        'payment_method': paymentMethod,
+      };
+      if (couponCode != null && couponCode.isNotEmpty) {
+        body['coupon_code'] = couponCode;
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/bookings'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
+      );
+      
+      final data = jsonDecode(response.body);
+      data['success'] = response.statusCode == 200 || response.statusCode == 201;
+      return data;
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
     }
   }
 }

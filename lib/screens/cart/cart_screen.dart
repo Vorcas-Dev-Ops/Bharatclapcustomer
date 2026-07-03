@@ -47,10 +47,24 @@ class _CartScreenState extends State<CartScreen> {
     setState(() => _isLoading = false);
   }
 
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _fetchAddress(),
+      CartState.fetchCart(),
+    ]);
+  }
+
   void _navigateToSlotSelection() {
+    if (_currentAddress == null || _currentAddress!['_id'] == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an address first')),
+      );
+      return;
+    }
+    
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const SlotSelectionScreen()),
+      MaterialPageRoute(builder: (context) => SlotSelectionScreen(addressId: _currentAddress!['_id'])),
     );
   }
 
@@ -68,45 +82,49 @@ class _CartScreenState extends State<CartScreen> {
 
             return Stack(
               children: [
-                SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 100),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(),
-                      const SizedBox(height: 20),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                        child: _buildAddressCard(),
-                      ),
-                      const SizedBox(height: 16),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                        child: _buildAccountDetails(),
-                      ),
-                      const SizedBox(height: 24),
-                      if (isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(20.0),
-                          child: Center(child: Text("Your cart is empty")),
-                        )
-                      else
+                RefreshIndicator(
+                  onRefresh: _refreshData,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 100),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(),
+                        const SizedBox(height: 20),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                          child: _buildCartItemsList(items),
+                          child: _buildAddressCard(),
                         ),
-                      if (!isEmpty) ...[
+                        const SizedBox(height: 16),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                          child: _buildPeopleAlsoChoose(),
+                          child: _buildAccountDetails(),
                         ),
-                        const SizedBox(height: 32),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                          child: _buildPaymentSummary(items, totalAmount),
-                        ),
+                        const SizedBox(height: 24),
+                        if (isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Center(child: Text("Your cart is empty")),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                            child: _buildCartItemsList(items),
+                          ),
+                        if (!isEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                            child: _buildPeopleAlsoChoose(),
+                          ),
+                          const SizedBox(height: 32),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                            child: _buildPaymentSummary(items, totalAmount),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 if (!isEmpty)
@@ -322,12 +340,34 @@ class _CartScreenState extends State<CartScreen> {
     final price = item['price_snapshot'] ?? subservice['base_price'] ?? 0;
     final quantity = item['quantity'] ?? 1;
     final subserviceId = subservice['_id'];
+    final imagePath = subservice['image'] ?? '';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (imagePath.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: imagePath.startsWith('http')
+                  ? Image.network(
+                      imagePath,
+                      height: 50,
+                      width: 50,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(height: 50, width: 50, color: Colors.grey.shade200, child: const Icon(Icons.image, size: 20, color: Colors.grey)),
+                    )
+                  : Image.asset(
+                      imagePath,
+                      height: 50,
+                      width: 50,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(height: 50, width: 50, color: Colors.grey.shade200, child: const Icon(Icons.image, size: 20, color: Colors.grey)),
+                    ),
+            ),
+            const SizedBox(width: 12),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

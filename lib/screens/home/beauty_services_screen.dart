@@ -24,6 +24,8 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
   List<dynamic> _services = [];
   String _searchQuery = '';
   int _selectedFilterIndex = 1; // 1 represents 'All'
+  bool _showPackagesList = true;
+  String? _selectedTier;
 
   List<Map<String, dynamic>> _filters = [];
   Map<String, dynamic>? _currentAddress;
@@ -179,6 +181,18 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
          }).toList();
       }
     }
+
+    if (_selectedTier != null && !_showPackagesList) {
+      result = result.where((s) {
+        if (s['hasPackages'] == true && s['packages'] != null) {
+          final packages = s['packages'] as List<dynamic>;
+          final hasTier = packages.any((p) => p['name']?.toString().toLowerCase() == _selectedTier!.toLowerCase());
+          return hasTier;
+        }
+        return false;
+      }).toList();
+    }
+
     return result;
   }
 
@@ -311,7 +325,11 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
           final isInstant = filter['isInstant'] == true;
 
           return GestureDetector(
-            onTap: () => setState(() => _selectedFilterIndex = index),
+            onTap: () => setState(() {
+              _selectedFilterIndex = index;
+              _showPackagesList = true;
+              _selectedTier = null;
+            }),
             child: Container(
               margin: const EdgeInsets.only(right: 12),
               width: 72,
@@ -346,19 +364,34 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
     );
   }
 
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _fetchAddress(),
+      _fetchServices(),
+    ]);
+  }
+
   Widget _buildServiceList() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF1B1464)));
     }
 
+    if (_selectedFilterIndex > 1 && _showPackagesList) {
+      return _buildGroupedView();
+    }
+
     final services = _displayServices;
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: services.length,
-      itemBuilder: (context, index) {
-        return _buildServiceCard(services[index]);
-      },
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        itemCount: services.length,
+        itemBuilder: (context, index) {
+          return _buildServiceCard(services[index]);
+        },
+      ),
     );
   }
 
@@ -367,6 +400,22 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
     String rating = service['rating']?.toString() ?? '4.8';
     String time = service['time']?.toString() ?? '45 mins';
     int price = service['base_price'] ?? 0;
+
+    // Use tier-specific pricing if available
+    if (_selectedTier != null && service['packages'] != null) {
+      final packages = service['packages'] as List<dynamic>;
+      final tierPackage = packages.firstWhere(
+        (p) => p['name']?.toString().toLowerCase() == _selectedTier!.toLowerCase(),
+        orElse: () => null,
+      );
+      if (tierPackage != null) {
+        price = tierPackage['base_price'] ?? price;
+        if (tierPackage['duration'] != null) {
+          time = '${tierPackage['duration']} mins';
+        }
+      }
+    }
+
     String imagePath = service['image'] ?? '';
 
     bool hasImage = imagePath.isNotEmpty;
@@ -484,7 +533,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                             _currentAddress?['_id'], 
                             _currentAddress?['area'] ?? _currentAddress?['city']
                           );
-                          if (data != null) {
+                          if (data != null && data['success'] == true) {
                             CartState.cartData.value = data;
                             CartState.updateCount(data);
                             if (context.mounted) {
@@ -497,7 +546,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).hideCurrentSnackBar();
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Failed to add to cart.')),
+                                SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
                               );
                             }
                           }
@@ -544,7 +593,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       children: [
         _buildGroupCard(
-          title: 'Premium',
+          title: 'Prime',
           description: 'Relaxing beauty treatments to refresh your body and mind.',
           rating: '4.2',
           imagePath: 'assets/images/premium_beauty.png',
@@ -566,7 +615,14 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
     required String rating,
     required String imagePath,
   }) {
-    return Container(
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedTier = title;
+          _showPackagesList = false;
+        });
+      },
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -672,6 +728,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 }

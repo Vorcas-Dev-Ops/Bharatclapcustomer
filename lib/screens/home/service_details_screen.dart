@@ -277,7 +277,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                           _currentAddress?['_id'], 
                           _currentAddress?['area'] ?? _currentAddress?['city']
                         );
-                        if (data != null) {
+                        if (data != null && data['success'] == true) {
                           CartState.cartData.value = data;
                           CartState.updateCount(data);
                           if (context.mounted) {
@@ -290,7 +290,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).hideCurrentSnackBar();
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Failed to add to cart.')),
+                              SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
                             );
                           }
                         }

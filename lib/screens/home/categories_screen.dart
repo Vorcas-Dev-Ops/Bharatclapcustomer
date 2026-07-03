@@ -34,29 +34,37 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     }
   }
 
+  Future<void> _refreshCategories() async {
+    await _fetchCategories();
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              _buildHeader(),
-              const SizedBox(height: 24),
-              _buildSearchBar(),
-              const SizedBox(height: 32),
-              _buildCategoriesPageView(context),
-              const SizedBox(height: 16),
-              _buildPageIndicator(),
-              const SizedBox(height: 32),
-              _buildMostBookedHeader(),
-              const SizedBox(height: 16),
-              _buildMostBookedServices(),
-              const SizedBox(height: 32),
-            ],
+      child: RefreshIndicator(
+        onRefresh: _refreshCategories,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 16),
+                _buildHeader(),
+                const SizedBox(height: 24),
+                _buildSearchBar(),
+                const SizedBox(height: 32),
+                _buildCategoriesPageView(context),
+                const SizedBox(height: 16),
+                _buildPageIndicator(),
+                const SizedBox(height: 32),
+                _buildMostBookedHeader(),
+                const SizedBox(height: 16),
+                _buildMostBookedServices(),
+                const SizedBox(height: 32),
+              ],
+            ),
           ),
         ),
       ),

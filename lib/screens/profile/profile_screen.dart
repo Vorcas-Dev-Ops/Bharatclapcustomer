@@ -90,35 +90,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   )
-                : SingleChildScrollView(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 24),
-                          const Text(
-                            'My Profile',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
+                : RefreshIndicator(
+                    onRefresh: _loadUserProfile,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 24),
+                            const Text(
+                              'My Profile',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 24),
-                          _buildProfileCard(),
-                          const SizedBox(height: 16),
-                          _buildStatsRow(),
-                          const SizedBox(height: 32),
-                          _buildSectionHeader('MY ACTIVITY'),
-                          const SizedBox(height: 12),
-                          _buildActivityCard(),
-                          const SizedBox(height: 32),
-                          _buildSectionHeader('ACCOUNT'),
-                          const SizedBox(height: 12),
-                          _buildAccountCard(context),
-                          const SizedBox(height: 32),
-                        ],
+                            const SizedBox(height: 24),
+                            _buildProfileCard(),
+                            const SizedBox(height: 16),
+                            _buildStatsRow(),
+                            const SizedBox(height: 32),
+                            _buildSectionHeader('MY ACTIVITY'),
+                            const SizedBox(height: 12),
+                            _buildActivityCard(),
+                            const SizedBox(height: 32),
+                            _buildSectionHeader('ACCOUNT'),
+                            const SizedBox(height: 12),
+                            _buildAccountCard(context),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -142,8 +146,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.all(24),
       child: Stack(
         children: [
-          Column(
-            children: [
+          SizedBox(
+            width: double.infinity,
+            child: Column(
+              children: [
               CircleAvatar(
                 radius: 40,
                 backgroundImage: (profileImage != null && profileImage.isNotEmpty)
@@ -155,39 +161,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     : null,
               ),
               const SizedBox(height: 16),
-              Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF1B1464),
+              if (_userProfile == null)
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B1464),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Login / Sign up', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                )
+              else ...[
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1B1464),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildContactPill(Icons.phone_outlined, phone),
-                  if (email.isNotEmpty && email != 'No Email') ...[
-                    const SizedBox(width: 12),
-                    _buildContactPill(Icons.email_outlined, email),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildContactPill(Icons.phone_outlined, phone),
+                    if (email.isNotEmpty && email != 'No Email') ...[
+                      const SizedBox(width: 12),
+                      _buildContactPill(Icons.email_outlined, email),
+                    ],
                   ],
-                ],
-              ),
+                ),
+              ],
             ],
           ),
-          Positioned(
-            right: 0,
-            top: 0,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF3F4F8),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.edit, size: 16, color: Color(0xFF1B1464)),
-            ),
           ),
+          if (_userProfile != null)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF3F4F8),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.edit, size: 16, color: Color(0xFF1B1464)),
+              ),
+            ),
         ],
       ),
     );

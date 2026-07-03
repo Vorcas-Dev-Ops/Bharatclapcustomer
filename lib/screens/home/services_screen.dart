@@ -435,21 +435,41 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _fetchAddress(),
+      _fetchData(),
+    ]);
+  }
+
   Widget _buildServiceList() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF1B1464)));
     }
     
     if (_services.isEmpty) {
-      return const Center(child: Text("No services found"));
+      return RefreshIndicator(
+        onRefresh: _refreshData,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 100),
+            Center(child: Text("No services found")),
+          ],
+        ),
+      );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: _services.length,
-      itemBuilder: (context, index) {
-        return _buildServiceCard(context, _services[index]);
-      },
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        itemCount: _services.length,
+        itemBuilder: (context, index) {
+          return _buildServiceCard(context, _services[index]);
+        },
+      ),
     );
   }
 
@@ -599,7 +619,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                               _currentAddress?['_id'], 
                               _currentAddress?['area'] ?? _currentAddress?['city']
                             );
-                            if (data != null) {
+                            if (data != null && data['success'] == true) {
                               CartState.cartData.value = data;
                               CartState.updateCount(data);
                               if (context.mounted) {
@@ -612,7 +632,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Failed to add to cart.')),
+                                  SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
                                 );
                               }
                             }
