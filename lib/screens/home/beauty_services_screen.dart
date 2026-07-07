@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
 import '../../providers/cart_state.dart';
+import '../auth/login_screen.dart';
 
 class BeautyServicesScreen extends StatefulWidget {
   final String categoryId;
@@ -47,6 +48,22 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
     return Icons.business;
   }
 
+  String? _getAssetIconForService(String name) {
+    final lowerName = name.toLowerCase();
+    final isMen = widget.gender.toLowerCase() == 'men';
+    
+    if (isMen) {
+      if (lowerName.contains('hair') || lowerName.contains('cut')) return 'assets/catogries/beauty/men/mhaircut.png';
+      if (lowerName.contains('wax')) return 'assets/catogries/beauty/men/wax.png';
+    } else {
+      if (lowerName.contains('hair') || lowerName.contains('cut')) return 'assets/catogries/beauty/women/whaircut.png';
+      if (lowerName.contains('massage') || lowerName.contains('spa')) return 'assets/catogries/beauty/women/massage.png';
+      if (lowerName.contains('facial') || lowerName.contains('makeup') || lowerName.contains('cleanup')) return 'assets/catogries/beauty/women/facial.png';
+      if (lowerName.contains('pedicure') || lowerName.contains('manicure')) return 'assets/catogries/beauty/women/pedicure.png';
+    }
+    return null;
+  }
+
   Future<void> _fetchAddress() async {
     final addresses = await ApiService.getAddresses();
     if (mounted && addresses.isNotEmpty) {
@@ -83,12 +100,13 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
 
       final List<Map<String, dynamic>> newFilters = [
         {'icon': Icons.bolt, 'title': 'Instant', 'isInstant': true},
-        {'icon': Icons.business, 'title': 'All', 'isInstant': false},
+        {'icon': Icons.business, 'assetIcon': 'assets/catogries/all.png', 'title': 'All', 'isInstant': false},
       ];
       for (var service in services) {
         final title = service['service_name']?.toString() ?? 'Unknown';
         newFilters.add({
           'icon': _getIconForService(title),
+          'assetIcon': _getAssetIconForService(title),
           'title': title,
           'isInstant': false,
           'id': service['_id'].toString(),
@@ -340,11 +358,19 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    filter['icon'],
-                    color: isSelected ? Colors.white : (isInstant ? Colors.green.shade600 : Colors.grey.shade600),
-                    size: 24,
-                  ),
+                  if (filter['assetIcon'] != null)
+                    Image.asset(
+                      filter['assetIcon'],
+                      height: 24,
+                      width: 24,
+                      color: isSelected ? Colors.white : (isInstant ? Colors.green.shade600 : Colors.grey.shade600),
+                    )
+                  else
+                    Icon(
+                      filter['icon'],
+                      color: isSelected ? Colors.white : (isInstant ? Colors.green.shade600 : Colors.grey.shade600),
+                      size: 24,
+                    ),
                   const SizedBox(height: 6),
                   Text(
                     filter['title'],
@@ -545,9 +571,45 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                           } else {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
-                              );
+                              
+                              if (data?['message'] == 'Please login first' || data?['message'] == 'Please Login first') {
+                                showDialog(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    title: const Text('Login Required', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
+                                    content: const Text('Please login to add items to your cart.', style: TextStyle(fontSize: 15)),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.pop(context);
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF1B1464),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                        child: const Text('Login', style: TextStyle(color: Colors.white)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
+                                );
+                              }
                             }
                           }
                         }

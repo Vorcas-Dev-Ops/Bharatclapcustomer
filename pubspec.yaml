@@ -75,6 +75,9 @@ flutter:
     - assets/catogries/cctv/
     - assets/catogries/vehicle/
     - assets/catogries/loan/
+    - assets/catogries/all.png
+    - assets/catogries/beauty/men/
+    - assets/catogries/beauty/women/
     - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see

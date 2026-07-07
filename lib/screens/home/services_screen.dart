@@ -3,6 +3,7 @@ import 'service_details_screen.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
 import '../../providers/cart_state.dart';
+import '../auth/login_screen.dart';
 
 class ServicesScreen extends StatefulWidget {
   final String? categoryId;
@@ -631,9 +632,45 @@ class _ServicesScreenState extends State<ServicesScreen> {
                             } else {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
-                                );
+                                
+                                if (data?['message'] == 'Please login first' || data?['message'] == 'Please Login first') {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      title: const Text('Login Required', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
+                                      content: const Text('Please login to add items to your cart.', style: TextStyle(fontSize: 15)),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                            );
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF1B1464),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          child: const Text('Login', style: TextStyle(color: Colors.white)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
+                                  );
+                                }
                               }
                             }
                           }
