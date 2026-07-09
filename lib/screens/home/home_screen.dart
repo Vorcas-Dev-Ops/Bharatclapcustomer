@@ -5,6 +5,7 @@ import '../../services/api_service.dart';
 import 'services_screen.dart';
 import 'beauty_services_screen.dart';
 import '../address/map_screen.dart';
+import '../address/add_address_screen.dart';
 import 'search_screen.dart';
 import '../cart/cart_screen.dart';
 import '../bookings/bookings_screen.dart';
@@ -24,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _apiPopularServices = [];
   List<dynamic> _apiRecentBookings = [];
   Map<String, dynamic>? _currentAddress;
+  List<dynamic> _addresses = [];
 
   @override
   void initState() {
@@ -64,9 +66,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchAddress() async {
     final addresses = await ApiService.getAddresses();
-    if (mounted && addresses.isNotEmpty) {
+    if (mounted) {
       setState(() {
-        _currentAddress = addresses.first;
+        _addresses = addresses;
+        _currentAddress = addresses.firstWhere(
+          (a) => a['is_default'] == true,
+          orElse: () => addresses.isNotEmpty ? addresses.first : null,
+        );
       });
     }
   }
@@ -171,27 +177,61 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         GestureDetector(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const MapScreen()),
-            );
+            if (_currentAddress == null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AddAddressScreen()),
+              ).then((_) => _fetchAddress());
+            } else {
+              _showAddressSelector();
+            }
           },
           child: Row(
             children: [
               const Icon(Icons.location_on_outlined, color: Color(0xFF1B1464)),
               const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(_currentAddress?['area'] ?? 'TC Palaya', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
-                      const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1B1464)),
-                    ],
-                  ),
-                  Text('${_currentAddress?['city'] ?? 'Bangalore'}, ${_currentAddress?['state'] ?? 'Karnataka'}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                ],
-              ),
+              _currentAddress == null
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1B1464).withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFF1B1464).withOpacity(0.2)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add, color: Color(0xFF1B1464), size: 16),
+                          SizedBox(width: 4),
+                          Text(
+                            'Add Address',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1B1464),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              _currentAddress?['area_locality'] ?? _currentAddress?['address_line_1'] ?? 'Saved Address',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                            ),
+                            const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1B1464)),
+                          ],
+                        ),
+                        Text(
+                          '${_currentAddress?['city'] ?? ''}, ${_currentAddress?['state'] ?? ''}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
             ],
           ),
         ),
@@ -238,6 +278,150 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  void _showAddressSelector() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Select Address',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1B1464),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.grey),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Flexible(
+                      child: _addresses.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No saved addresses found.',
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              itemCount: _addresses.length,
+                              separatorBuilder: (context, index) => const Divider(height: 16),
+                              itemBuilder: (context, index) {
+                                final address = _addresses[index];
+                                final isSelected = _currentAddress?['_id'] == address['_id'];
+
+                                return InkWell(
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    setState(() => _currentAddress = address);
+                                    await ApiService.setDefaultAddress(address['_id']);
+                                    _fetchAddress();
+                                  },
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        address['address_type']?.toLowerCase() == 'home'
+                                            ? Icons.home_outlined
+                                            : address['address_type']?.toLowerCase() == 'work'
+                                                ? Icons.work_outline
+                                                : Icons.near_me_outlined,
+                                        color: isSelected ? const Color(0xFF1B1464) : Colors.grey,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              address['address_type'] ?? 'Address',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: isSelected ? const Color(0xFF1B1464) : Colors.black87,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '${address['house_no_building']}, ${address['address_line_1']}',
+                                              style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                            ),
+                                            Text(
+                                              '${address['city']}, ${address['state']} - ${address['pincode']}',
+                                              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (isSelected)
+                                        const Icon(
+                                          Icons.check_circle,
+                                          color: Color(0xFF1B1464),
+                                          size: 20,
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const AddAddressScreen()),
+                          ).then((_) => _fetchAddress());
+                        },
+                        icon: const Icon(Icons.add, color: Color(0xFF1B1464)),
+                        label: const Text(
+                          'Add New Address',
+                          style: TextStyle(
+                            color: Color(0xFF1B1464),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFF1B1464)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

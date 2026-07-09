@@ -121,6 +121,31 @@ class ApiService {
     }
   }
 
+  // Google Login
+  static Future<Map<String, dynamic>> googleLogin(String googleToken) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/google-login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'token': googleToken,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      data['success'] = response.statusCode == 200 || response.statusCode == 201;
+
+      if (data['success'] == true) {
+        if (data['token'] != null) {
+          await saveToken(data['token']);
+        }
+      }
+      return data;
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // Add Address
   static Future<Map<String, dynamic>> addAddress(Map<String, dynamic> addressData) async {
     try {
@@ -136,6 +161,54 @@ class ApiService {
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode(addressData),
+      );
+
+      final data = jsonDecode(response.body);
+      data['success'] = response.statusCode == 200 || response.statusCode == 201;
+      return data;
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Delete Address
+  static Future<Map<String, dynamic>> deleteAddress(String id) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {'success': false, 'message': 'Not authenticated'};
+      }
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/address/$id'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+      data['success'] = response.statusCode == 200 || response.statusCode == 201;
+      return data;
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Set Address as Default
+  static Future<Map<String, dynamic>> setDefaultAddress(String id) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {'success': false, 'message': 'Not authenticated'};
+      }
+
+      final response = await http.patch(
+        Uri.parse('$baseUrl/address/$id/set-default'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
       );
 
       final data = jsonDecode(response.body);

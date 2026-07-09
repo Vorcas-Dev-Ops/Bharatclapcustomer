@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../auth/login_screen.dart';
 import '../../services/api_service.dart';
+import '../address/saved_addresses_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -306,7 +307,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Column(
         children: [
-          _buildListTile(Icons.location_on_outlined, 'Saved Addresses'),
+          _buildListTile(
+            Icons.location_on_outlined, 
+            'Saved Addresses',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SavedAddressesScreen()),
+              );
+            },
+          ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFF3F4F8), indent: 20, endIndent: 20),
           _buildListTile(Icons.payments_outlined, 'Payment Methods'),
           const Divider(height: 1, thickness: 1, color: Color(0xFFF3F4F8), indent: 20, endIndent: 20),

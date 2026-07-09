@@ -1,8 +1,32 @@
 import 'package:flutter/material.dart';
 import 'map_screen.dart';
 
-class AddAddressScreen extends StatelessWidget {
+class AddAddressScreen extends StatefulWidget {
   const AddAddressScreen({super.key});
+
+  @override
+  State<AddAddressScreen> createState() => _AddAddressScreenState();
+}
+
+class _AddAddressScreenState extends State<AddAddressScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _navigateToMap({String? query}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapScreen(
+          initialSearchQuery: query,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +48,9 @@ class AddAddressScreen extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               TextField(
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (val) => _navigateToMap(query: val.trim()),
                 decoration: InputDecoration(
                   hintText: 'Search for your location/ Apartment..',
                   hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
@@ -47,22 +74,24 @@ class AddAddressScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               InkWell(
-                onTap: () {
-                  // Locate on map logic
-                },
-                child: const Row(
-                  children: [
-                    Icon(Icons.my_location, color: Colors.blue, size: 20),
-                    SizedBox(width: 12),
-                    Text(
-                      'Locate on map',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87,
+                onTap: () => _navigateToMap(),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.my_location, color: Colors.blue, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Locate on map',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.blue.shade700,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const Spacer(),
@@ -70,12 +99,7 @@ class AddAddressScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const MapScreen()),
-                    );
-                  },
+                  onPressed: () => _navigateToMap(query: _searchController.text.trim()),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1B1464),
                     shape: RoundedRectangleBorder(

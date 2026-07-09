@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'otp_screen.dart';
 import '../../services/api_service.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../home/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,6 +15,56 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
   bool _isLoading = false;
+
+  void _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    try {
+      final googleSignIn = GoogleSignIn(
+        clientId: dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'],
+        scopes: ['email', 'profile'],
+      );
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to obtain Google authentication token')),
+          );
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+
+      final response = await ApiService.googleLogin(idToken);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (response['success'] == true) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            (route) => false,
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(response['message'] ?? 'Google login failed')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google Sign-In Error: $e')),
+        );
+      }
+    }
+  }
 
   void _getOtp() async {
     final phone = _phoneController.text.trim();
@@ -179,9 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Google Sign In
-                  },
+                  onPressed: _isLoading ? null : _handleGoogleSignIn,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF1B1464),
