@@ -173,68 +173,82 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHeader() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        GestureDetector(
-          onTap: () {
-            if (_currentAddress == null) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AddAddressScreen()),
-              ).then((_) => _fetchAddress());
-            } else {
-              _showAddressSelector();
-            }
-          },
-          child: Row(
-            children: [
-              const Icon(Icons.location_on_outlined, color: Color(0xFF1B1464)),
-              const SizedBox(width: 8),
-              _currentAddress == null
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1B1464).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: const Color(0xFF1B1464).withOpacity(0.2)),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add, color: Color(0xFF1B1464), size: 16),
-                          SizedBox(width: 4),
-                          Text(
-                            'Add Address',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1B1464),
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              if (_currentAddress == null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AddAddressScreen()),
+                ).then((_) => _fetchAddress());
+              } else {
+                _showAddressSelector();
+              }
+            },
+            child: Row(
+              children: [
+                const Icon(Icons.location_on_outlined, color: Color(0xFF1B1464)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _currentAddress == null
+                      ? Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1B1464).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFF1B1464).withOpacity(0.2)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add, color: Color(0xFF1B1464), size: 16),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Add Address',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1B1464),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              _currentAddress?['area_locality'] ?? _currentAddress?['address_line_1'] ?? 'Saved Address',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _currentAddress?['area_locality'] ?? _currentAddress?['address_line_1'] ?? 'Saved Address',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                                  ),
+                                ),
+                                const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1B1464)),
+                              ],
                             ),
-                            const Icon(Icons.keyboard_arrow_down, color: Color(0xFF1B1464)),
+                            Text(
+                              '${_currentAddress?['city'] ?? ''}, ${_currentAddress?['state'] ?? ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            ),
                           ],
                         ),
-                        Text(
-                          '${_currentAddress?['city'] ?? ''}, ${_currentAddress?['state'] ?? ''}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                        ),
-                      ],
-                    ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
+        const SizedBox(width: 12),
         GestureDetector(
           onTap: () {
             Navigator.push(

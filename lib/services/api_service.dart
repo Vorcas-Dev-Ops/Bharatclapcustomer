@@ -36,7 +36,11 @@ class ApiService {
 
   static Future<bool> isLoggedIn() async {
     final token = await getToken();
-    return token != null && token.isNotEmpty;
+    if (token == null || token.isEmpty || token == 'pending_auth_token') {
+      return false;
+    }
+    final profile = await getUserProfile();
+    return profile != null && profile['_id'] != null && profile['_id'] != 'pending_verification';
   }
 
   // Send OTP
@@ -77,11 +81,10 @@ class ApiService {
       data['success'] = response.statusCode == 200 || response.statusCode == 201;
       
       if (data['success'] == true) {
-        // Handle token which might be nested under user object
-        if (data['user'] != null && data['user']['token'] != null && data['user']['token'] != 'pending_auth_token') {
-          await saveToken(data['user']['token']);
-        } else if (data['token'] != null) {
-          await saveToken(data['token']);
+        final user = data['user'];
+        final token = user?['token'] ?? data['token'];
+        if (token != null && token != 'pending_auth_token') {
+          await saveToken(token);
         }
       }
       return data;
@@ -594,6 +597,74 @@ class ApiService {
       
       final data = jsonDecode(response.body);
       data['success'] = response.statusCode == 200 || response.statusCode == 201;
+      return data;
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Create Razorpay Order (Secure Backend Call - API Secret key stays on backend)
+  static Future<Map<String, dynamic>?> createRazorpayOrder(double amount) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Please login first'};
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/payments/create-order'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'amount': amount,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        data['success'] = true;
+        return data;
+      }
+      data['success'] = false;
+      return data;
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Verify Razorpay Payment (Secure Backend Verification using SHA256 HMAC)
+  static Future<Map<String, dynamic>?> verifyRazorpayPayment({
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+    required double amount,
+    String? bookingId,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Please login first'};
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/payments/verify'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'razorpay_order_id': razorpayOrderId,
+          'razorpay_payment_id': razorpayPaymentId,
+          'razorpay_signature': razorpaySignature,
+          'amount': amount,
+          if (bookingId != null) 'booking_id': bookingId,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        data['success'] = true;
+        return data;
+      }
+      data['success'] = false;
       return data;
     } catch (e) {
       return {'success': false, 'message': e.toString()};

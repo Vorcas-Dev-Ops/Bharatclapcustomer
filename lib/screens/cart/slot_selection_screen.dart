@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../providers/cart_state.dart';
 import 'package:intl/intl.dart';
+import 'payment_selection_screen.dart';
 
 class SlotSelectionScreen extends StatefulWidget {
   final String addressId;
@@ -56,6 +57,7 @@ class _SlotSelectionScreenState extends State<SlotSelectionScreen> {
     try {
       final selectedDate = DateFormat('yyyy-MM-dd').format(_dates[_selectedDateIndex]);
       final selectedTime = _times[_selectedTimeIndex];
+      final totalAmount = (cartData['total_amount'] as num?)?.toDouble() ?? 0.0;
 
       final items = cartData['items'] as List;
 
@@ -68,28 +70,24 @@ class _SlotSelectionScreenState extends State<SlotSelectionScreen> {
         }
       }
 
-      // Create Booking
-      final result = await ApiService.createBooking(widget.addressId, 'cod');
-      
-      if (result != null && result['success'] == true) {
-        await CartState.fetchCart(); // This will pull the empty cart from backend
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Booking created successfully!')),
-          );
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(result?['message'] ?? 'Failed to create booking')),
-          );
-        }
+      // Navigate to Payment Method Selection Screen
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PaymentSelectionScreen(
+              addressId: widget.addressId,
+              selectedDate: selectedDate,
+              selectedTime: selectedTime,
+              totalAmount: totalAmount,
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Error updating slot: $e')),
         );
       }
     } finally {

@@ -272,11 +272,14 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('Adding ${widget.title} to cart...')),
                         );
+                        final rawLoc = _currentAddress?['area_locality'] ?? _currentAddress?['city'] ?? _currentAddress?['address_line_1'] ?? 'Bangalore';
+                        final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
+
                         final data = await ApiService.addToCart(
                           widget.subserviceId!, 
                           1, 
                           _currentAddress?['_id'], 
-                          _currentAddress?['area'] ?? _currentAddress?['city']
+                          locName
                         );
                         if (data != null && data['success'] == true) {
                           CartState.cartData.value = data;

@@ -49,7 +49,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
       final status = booking['status']?.toString().toLowerCase() ?? '';
       if (_selectedTab == 0) {
         // Upcoming
-        return status == 'pending' || status == 'accepted';
+        return status == 'pending' || status == 'accepted' || status == 'provider_searching';
       } else if (_selectedTab == 1) {
         // Ongoing
         return status == 'in_progress' || status == 'started' || status == 'ongoing';
@@ -183,7 +183,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
     // Subservice details
     final subservice = booking['subservice_id'];
     final serviceName = subservice != null && subservice is Map
-        ? subservice['name'] ?? 'Service'
+        ? subservice['subservice_name'] ?? 'Service'
         : 'Service';
         
     // Format date and time

@@ -164,7 +164,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
     double screenWidth = MediaQuery.of(context).size.width;
     double cardWidth = (screenWidth - 40 - 16) / 2; // 40 for horizontal padding, 16 for crossAxisSpacing
-    double cardHeight = cardWidth / 1.075; // aspect ratio is 1.075
+    double cardHeight = cardWidth / 0.95; // aspect ratio is 0.95 to give comfortable height
     double pageViewHeight = (cardHeight * 2) + 16 + 10; // 2 rows, 16 mainAxisSpacing, 10 extra padding
 
     List<List<dynamic>> categoryPages = [];
@@ -193,7 +193,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         crossAxisCount: 2,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
-        childAspectRatio: 1.075, // Ratio corresponding to 157x146
+        childAspectRatio: 0.95,
       ),
       itemCount: categories.length,
       itemBuilder: (context, index) {
@@ -227,38 +227,39 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: const Color(0xFFE8E8FF), width: 1.2),
         ),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: const Color(0xFFF3F4F8),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: iconUrl.isNotEmpty 
-                ? Image.network(iconUrl, width: 26, height: 26, errorBuilder: (_,__,___) => const Icon(Icons.category, color: Color(0xFF1B1464), size: 26))
-                : const Icon(Icons.category, color: Color(0xFF1B1464), size: 26),
+                ? Image.network(iconUrl, width: 24, height: 24, errorBuilder: (_,__,___) => const Icon(Icons.category, color: Color(0xFF1B1464), size: 24))
+                : const Icon(Icons.category, color: Color(0xFF1B1464), size: 24),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
               title,
               style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
                 color: Colors.black87,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               subtitle,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 color: Colors.grey.shade600,
-                height: 1.4,
+                height: 1.3,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,

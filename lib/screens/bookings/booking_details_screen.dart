@@ -165,7 +165,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
   Widget _buildHeader(BuildContext context) {
     final subservice = _bookingData['subservice_id'];
     final serviceName = subservice != null && subservice is Map
-        ? subservice['name'] ?? 'Service'
+        ? subservice['subservice_name'] ?? 'Service'
         : 'Service';
 
     return Padding(
@@ -196,7 +196,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
   Widget _buildServiceInfoCard() {
     final subservice = _bookingData['subservice_id'];
     final serviceName = subservice != null && subservice is Map
-        ? subservice['name'] ?? 'Service'
+        ? subservice['subservice_name'] ?? 'Service'
         : 'Service';
     final bookingIdStr = _bookingData['booking_id'] ?? '#---';
     final payableAmount = _bookingData['payable_amount']?.toString() ?? '0';

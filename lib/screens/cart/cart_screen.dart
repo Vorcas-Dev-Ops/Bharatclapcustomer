@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../providers/cart_state.dart';
 import 'slot_selection_screen.dart';
+import '../address/add_address_screen.dart';
+import '../home/categories_screen.dart';
 
 class CartScreen extends StatefulWidget {
   final bool useSingleCategoryDesign;
@@ -13,12 +15,16 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   Map<String, dynamic>? _currentAddress;
+  List<dynamic> _addresses = [];
+  List<dynamic> _popularServices = [];
   bool _isLoading = false;
+  bool _isPopularLoading = true;
 
   @override
   void initState() {
     super.initState();
     _fetchAddress();
+    _fetchPopularServices();
     CartState.fetchCart();
   }
 
@@ -26,8 +32,28 @@ class _CartScreenState extends State<CartScreen> {
     final addresses = await ApiService.getAddresses();
     if (mounted && addresses.isNotEmpty) {
       setState(() {
-        _currentAddress = addresses.first;
+        _addresses = addresses;
+        _currentAddress = addresses.firstWhere(
+          (a) => a['is_default'] == true,
+          orElse: () => addresses.first,
+        );
       });
+    }
+  }
+
+  Future<void> _fetchPopularServices() async {
+    try {
+      final services = await ApiService.getPopularServices();
+      if (mounted) {
+        setState(() {
+          _popularServices = services;
+          _isPopularLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isPopularLoading = false);
+      }
     }
   }
 
@@ -47,11 +73,179 @@ class _CartScreenState extends State<CartScreen> {
     setState(() => _isLoading = false);
   }
 
+  Future<void> _addRecommendedService(dynamic service) async {
+    final subserviceId = service['_id'];
+    if (subserviceId == null) return;
+
+    final rawLoc = _currentAddress?['area_locality'] ?? _currentAddress?['city'] ?? _currentAddress?['address_line_1'] ?? 'Bangalore';
+    final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Adding ${service['subservice_name'] ?? service['service_name'] ?? 'service'} to cart...')),
+    );
+
+    setState(() => _isLoading = true);
+    final data = await ApiService.addToCart(
+      subserviceId.toString(),
+      1,
+      _currentAddress?['_id'],
+      locName,
+    );
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      if (data != null && data['success'] == true) {
+        CartState.cartData.value = data;
+        CartState.updateCount(data);
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${service['subservice_name'] ?? service['service_name']} added to cart!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data?['message'] ?? 'Failed to add item')),
+        );
+      }
+    }
+  }
+
   Future<void> _refreshData() async {
     await Future.wait([
       _fetchAddress(),
+      _fetchPopularServices(),
       CartState.fetchCart(),
     ]);
+  }
+
+  void _showAddressSelectorSheet() async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Select Delivery Address',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1B1464),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (_addresses.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                      child: Text('No saved addresses found.'),
+                    )
+                  else
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _addresses.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final addr = _addresses[index];
+                          final id = addr['_id'];
+                          final isSelected = _currentAddress?['_id'] == id;
+                          final title = addr['area_locality'] ?? addr['address_line_1'] ?? 'Address ${index + 1}';
+                          final subtitle = '${addr['city'] ?? ''}, ${addr['state'] ?? ''} ${addr['pincode'] ?? ''}';
+
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                            leading: Icon(
+                              Icons.location_on,
+                              color: isSelected ? const Color(0xFF1B1464) : Colors.grey,
+                            ),
+                            title: Text(
+                              title,
+                              style: TextStyle(
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? const Color(0xFF1B1464) : Colors.black87,
+                              ),
+                            ),
+                            subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+                            trailing: isSelected
+                                ? const Icon(Icons.check_circle, color: Color(0xFF1B1464))
+                                : null,
+                            onTap: () async {
+                              setState(() {
+                                _currentAddress = addr;
+                              });
+                              Navigator.pop(context);
+                              if (id != null) {
+                                await ApiService.setDefaultAddress(id);
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AddAddressScreen()),
+                        ).then((_) => _fetchAddress());
+                      },
+                      icon: const Icon(Icons.add, color: Color(0xFF1B1464)),
+                      label: const Text(
+                        'Add New Address',
+                        style: TextStyle(
+                          color: Color(0xFF1B1464),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF1B1464)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _onAddMoreItemsPressed() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const CategoriesScreen()),
+      );
+    }
   }
 
   void _navigateToSlotSelection() {
@@ -201,46 +395,62 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildAddressCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.location_on_outlined, color: Color(0xFF1B1464)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _currentAddress?['area'] ?? 'Add an Address',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+    final title = _currentAddress?['area_locality'] ?? _currentAddress?['address_line_1'] ?? 'Add an Address';
+    final subtitle = _currentAddress != null
+        ? '${_currentAddress!['city'] ?? ''}, ${_currentAddress!['state'] ?? ''}'
+        : 'No address selected';
+
+    return GestureDetector(
+      onTap: _showAddressSelectorSheet,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.location_on_outlined, color: Color(0xFF1B1464)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: _showAddressSelectorSheet,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _currentAddress != null ? '${_currentAddress!['city']}, ${_currentAddress!['state']}' : 'No address selected',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                child: const Text(
+                  'Change',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
                 ),
-              ],
+              ),
             ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text(
-              'Change',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -300,10 +510,10 @@ class _CartScreenState extends State<CartScreen> {
                 child: const Icon(Icons.home_repair_service, color: Colors.black87, size: 20),
               ),
               const SizedBox(width: 12),
-              Column(
+              const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Services',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
                   ),
@@ -315,16 +525,27 @@ class _CartScreenState extends State<CartScreen> {
           ...items.map((item) => _buildCartItem(item)),
           const SizedBox(height: 16),
           Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.add_circle_outline, color: Colors.grey.shade600, size: 16),
-                const SizedBox(width: 8),
-                Text(
-                  'Add More items',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontWeight: FontWeight.w500),
+            child: InkWell(
+              onTap: _onAddMoreItemsPressed,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B1464).withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-              ],
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_circle_outline, color: Color(0xFF1B1464), size: 16),
+                    SizedBox(width: 8),
+                    Text(
+                      'Add More items',
+                      style: TextStyle(fontSize: 14, color: Color(0xFF1B1464), fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -441,21 +662,165 @@ class _CartScreenState extends State<CartScreen> {
         const SizedBox(height: 16),
         SizedBox(
           height: 180,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            children: [
-              _buildAlsoChooseCard('AC Repair', 'From ₹499', 'assets/images/ac_repair.png', '4.8'),
-              const SizedBox(width: 16),
-              _buildAlsoChooseCard('Fan Replacement', 'From ₹499', 'assets/catogries/Electrician/fan.png', '4.8'),
-            ],
-          ),
+          child: _isPopularLoading
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF1B1464)))
+              : _popularServices.isEmpty
+                  ? ListView(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      children: [
+                        _buildFallbackAlsoChooseCard('AC Repair', '₹499', 'assets/images/service_repair.png', '4.8'),
+                        const SizedBox(width: 16),
+                        _buildFallbackAlsoChooseCard('Fan Replacement', '₹499', 'assets/images/service_repair.png', '4.8'),
+                      ],
+                    )
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      itemCount: _popularServices.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 16),
+                      itemBuilder: (context, index) {
+                        final service = _popularServices[index];
+                        return _buildDynamicAlsoChooseCard(service);
+                      },
+                    ),
         ),
       ],
     );
   }
 
-  Widget _buildAlsoChooseCard(String title, String price, String itemImagePath, String rating) {
+  Widget _buildDynamicAlsoChooseCard(dynamic service) {
+    final title = service['subservice_name'] ?? service['service_name'] ?? 'Service';
+    final price = service['base_price'] ?? service['price'] ?? 499;
+    final image = service['image'] ?? service['icon'] ?? '';
+    final rating = (service['avg_rating'] ?? 4.8).toString();
+
+    return Container(
+      width: 150,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: image.toString().startsWith('http')
+                    ? Image.network(
+                        image,
+                        height: 90,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 90,
+                          width: double.infinity,
+                          color: const Color(0xFFF0F2FF),
+                          child: const Icon(Icons.category, color: Color(0xFF1B1464), size: 32),
+                        ),
+                      )
+                    : Image.asset(
+                        image.toString().isNotEmpty ? image : 'assets/images/service_repair.png',
+                        height: 90,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          height: 90,
+                          width: double.infinity,
+                          color: const Color(0xFFF0F2FF),
+                          child: const Icon(Icons.category, color: Color(0xFF1B1464), size: 32),
+                        ),
+                      ),
+              ),
+              Positioned(
+                bottom: -10,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.star, color: Colors.green.shade600, size: 10),
+                      const SizedBox(width: 4),
+                      Text(
+                        rating,
+                        style: TextStyle(
+                          color: Colors.green.shade600,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12.0).copyWith(top: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: () => _addRecommendedService(service),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0xFFE8E8FF), width: 1.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('Add', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'From ₹$price',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFallbackAlsoChooseCard(String title, String price, String itemImagePath, String rating) {
     return Container(
       width: 150,
       decoration: BoxDecoration(
@@ -483,11 +848,11 @@ class _CartScreenState extends State<CartScreen> {
                   height: 90,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
+                  errorBuilder: (_, __, ___) => Container(
                     height: 90,
                     width: double.infinity,
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.image, color: Colors.grey),
+                    color: const Color(0xFFF0F2FF),
+                    child: const Icon(Icons.category, color: Color(0xFF1B1464), size: 32),
                   ),
                 ),
               ),
@@ -541,7 +906,7 @@ class _CartScreenState extends State<CartScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
@@ -554,7 +919,7 @@ class _CartScreenState extends State<CartScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  price,
+                  'From $price',
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
                 ),
               ],
@@ -566,16 +931,16 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildPaymentSummary(List<dynamic> items, double itemTotal) {
-    double taxes = 0; // Keeping 0 for now as requested by user to use exact real data
+    double taxes = 0;
     double total = itemTotal + taxes;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        const Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Payment Summary',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
             ),
@@ -591,42 +956,41 @@ class _CartScreenState extends State<CartScreen> {
           ),
           child: Column(
             children: [
-              _buildPaymentRow('Items Total', '₹${itemTotal.toInt()}'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Item Total', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                  Text('₹${itemTotal.toInt()}', style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                ],
+              ),
               const SizedBox(height: 12),
-              _buildPaymentRow('Taxes and Fee', '₹${taxes.toInt()}'),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 16),
-              _buildPaymentRow('Total Amount', '₹${total.toInt()}', isBold: true),
-              const SizedBox(height: 16),
-              _buildPaymentRow('Amount to Pay', '₹${total.toInt()}', isBold: true),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Item Discount', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                  const Text('- ₹0', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w500, fontSize: 14)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Taxes and Fee', style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                  Text('₹${taxes.toInt()}', style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                ],
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12.0),
+                child: Divider(),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Total Pay', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+                  Text('₹${total.toInt()}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1B1464))),
+                ],
+              ),
             ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPaymentRow(String title, String amount, {bool isBold = false}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              color: isBold ? Colors.black87 : Colors.grey.shade700,
-            ),
-          ),
-        ),
-        Text(
-          amount,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-            color: Colors.black87,
           ),
         ),
       ],
