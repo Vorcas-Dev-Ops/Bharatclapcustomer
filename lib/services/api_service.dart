@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
+import 'server_error_handler.dart';
 
 class ApiService {
   static String get baseUrl {
@@ -12,6 +13,75 @@ class ApiService {
       url = url.replaceAll('localhost', '10.0.2.2');//10.0.2.2
     }
     return url;
+  }
+
+  static void _checkResponse(http.Response response) {
+    if (response.statusCode == 503 || response.statusCode == 502 || response.statusCode == 504) {
+      ServerErrorHandler.handle503Error(
+        message: 'Server is currently unavailable (${response.statusCode}). Please try again later.',
+      );
+    }
+  }
+
+  static void _handleError(Object e) {
+    ServerErrorHandler.handle503Error(
+      message: 'Unable to communicate with the server. Please check your network or try again later.',
+    );
+  }
+
+  static Future<http.Response> _get(Uri url, {Map<String, String>? headers}) async {
+    try {
+      final response = await http.get(url, headers: headers);
+      _checkResponse(response);
+      return response;
+    } catch (e) {
+      _handleError(e);
+      rethrow;
+    }
+  }
+
+  static Future<http.Response> _post(Uri url, {Map<String, String>? headers, Object? body}) async {
+    try {
+      final response = await http.post(url, headers: headers, body: body);
+      _checkResponse(response);
+      return response;
+    } catch (e) {
+      _handleError(e);
+      rethrow;
+    }
+  }
+
+  static Future<http.Response> _put(Uri url, {Map<String, String>? headers, Object? body}) async {
+    try {
+      final response = await http.put(url, headers: headers, body: body);
+      _checkResponse(response);
+      return response;
+    } catch (e) {
+      _handleError(e);
+      rethrow;
+    }
+  }
+
+  static Future<http.Response> _delete(Uri url, {Map<String, String>? headers, Object? body}) async {
+    try {
+      final response = await http.delete(url, headers: headers, body: body);
+      _checkResponse(response);
+      return response;
+    } catch (e) {
+      _handleError(e);
+      rethrow;
+    }
+  }
+
+  static Future<http.Response> _patch(Uri url, {Map<String, String>? headers, Object? body}) async {
+    try {
+      final response = await http.patch(url, headers: headers, body: body);
+      _checkResponse(response);
+      return response;
+    } catch (e) {
+      _handleError(e);
+      rethrow;
+    }
   }
 
   static const String _tokenKey = 'auth_token';
@@ -46,11 +116,13 @@ class ApiService {
   // Send OTP
   static Future<Map<String, dynamic>> sendOtp(String phone) async {
     try {
-      final response = await http.post(
+      final identifier = phone.trim();
+
+      final response = await _post(
         Uri.parse('$baseUrl/users/send-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'identifier': phone,
+          'identifier': identifier,
           'role': 'customer',
           'useEmail': false
         }),
@@ -67,11 +139,13 @@ class ApiService {
   // Verify OTP
   static Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
     try {
-      final response = await http.post(
+      final identifier = phone.trim();
+
+      final response = await _post(
         Uri.parse('$baseUrl/users/verify-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'identifier': phone,
+          'identifier': identifier,
           'otp': otp,
           'useEmail': false
         }),
@@ -96,7 +170,7 @@ class ApiService {
   // Register User
   static Future<Map<String, dynamic>> registerUser(String phone, String name, [String? email, String? gender]) async {
     try {
-      final Map<String, dynamic> body = {'phone': phone, 'name': name};
+      final Map<String, dynamic> body = {'phone': phone.trim(), 'name': name};
       if (email != null && email.isNotEmpty) {
         body['email'] = email;
       }
@@ -104,7 +178,7 @@ class ApiService {
         body['gender'] = gender;
       }
 
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$baseUrl/users/register'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(body),
@@ -124,10 +198,37 @@ class ApiService {
     }
   }
 
+  // Email Login
+  static Future<Map<String, dynamic>> emailLogin(String email, String password) async {
+    try {
+      final response = await _post(
+        Uri.parse('$baseUrl/users/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email.trim(),
+          'password': password,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      data['success'] = response.statusCode == 200 || response.statusCode == 201;
+
+      if (data['success'] == true) {
+        final token = data['token'] ?? (data['user'] != null ? data['user']['token'] : null);
+        if (token != null) {
+          await saveToken(token);
+        }
+      }
+      return data;
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // Google Login
   static Future<Map<String, dynamic>> googleLogin(String googleToken) async {
     try {
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$baseUrl/users/google-login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -157,7 +258,7 @@ class ApiService {
         return {'success': false, 'message': 'Not authenticated'};
       }
 
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$baseUrl/address'),
         headers: {
           'Content-Type': 'application/json',
@@ -182,7 +283,7 @@ class ApiService {
         return {'success': false, 'message': 'Not authenticated'};
       }
 
-      final response = await http.delete(
+      final response = await _delete(
         Uri.parse('$baseUrl/address/$id'),
         headers: {
           'Content-Type': 'application/json',
@@ -206,7 +307,7 @@ class ApiService {
         return {'success': false, 'message': 'Not authenticated'};
       }
 
-      final response = await http.patch(
+      final response = await _patch(
         Uri.parse('$baseUrl/address/$id/set-default'),
         headers: {
           'Content-Type': 'application/json',
@@ -228,7 +329,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return [];
 
-      final response = await http.get(
+      final response = await _get(
         Uri.parse('$baseUrl/address'),
         headers: {
           'Content-Type': 'application/json',
@@ -254,7 +355,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return null;
 
-      final response = await http.get(
+      final response = await _get(
         Uri.parse('$baseUrl/users/me'),
         headers: {
           'Content-Type': 'application/json',
@@ -274,7 +375,7 @@ class ApiService {
   // Get Popular Services
   static Future<List<dynamic>> getPopularServices() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/services'));
+      final response = await _get(Uri.parse('$baseUrl/services'));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
@@ -311,7 +412,7 @@ class ApiService {
   // Get Banners
   static Future<List<dynamic>> getBanners() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/banners'));
+      final response = await _get(Uri.parse('$baseUrl/banners'));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
@@ -327,7 +428,7 @@ class ApiService {
   // Get Categories
   static Future<List<dynamic>> getCategories() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/categories'));
+      final response = await _get(Uri.parse('$baseUrl/categories'));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
@@ -347,7 +448,7 @@ class ApiService {
       if (gender != null) {
         url += '&gender=${gender.toLowerCase()}';
       }
-      final response = await http.get(Uri.parse(url));
+      final response = await _get(Uri.parse(url));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
@@ -363,7 +464,7 @@ class ApiService {
   // Get Sub-services by Category
   static Future<List<dynamic>> getSubServicesByCategory(String categoryId) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/sub-services?category_id=$categoryId'));
+      final response = await _get(Uri.parse('$baseUrl/sub-services?category_id=$categoryId'));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
@@ -382,7 +483,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return [];
 
-      final response = await http.get(
+      final response = await _get(
         Uri.parse('$baseUrl/bookings/my?limit=$limit&page=$page'),
         headers: {
           'Content-Type': 'application/json',
@@ -408,7 +509,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return null;
 
-      final response = await http.get(
+      final response = await _get(
         Uri.parse('$baseUrl/bookings/$bookingId'),
         headers: {
           'Content-Type': 'application/json',
@@ -431,7 +532,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return null;
 
-      final response = await http.get(
+      final response = await _get(
         Uri.parse('$baseUrl/cart'),
         headers: {
           'Content-Type': 'application/json',
@@ -452,7 +553,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return {'success': false, 'message': 'Please login first'};
 
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$baseUrl/cart/add'),
         headers: {
           'Content-Type': 'application/json',
@@ -486,7 +587,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return null;
 
-      final response = await http.put(
+      final response = await _put(
         Uri.parse('$baseUrl/cart/update'),
         headers: {
           'Content-Type': 'application/json',
@@ -511,7 +612,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return null;
 
-      final response = await http.delete(
+      final response = await _delete(
         Uri.parse('$baseUrl/cart/item/$subserviceId'),
         headers: {
           'Content-Type': 'application/json',
@@ -532,7 +633,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return false;
 
-      final response = await http.delete(
+      final response = await _delete(
         Uri.parse('$baseUrl/cart'),
         headers: {
           'Content-Type': 'application/json',
@@ -551,7 +652,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return null;
 
-      final response = await http.put(
+      final response = await _put(
         Uri.parse('$baseUrl/cart/slot'),
         headers: {
           'Content-Type': 'application/json',
@@ -573,7 +674,7 @@ class ApiService {
   }
 
   // Checkout / Create Booking
-  static Future<Map<String, dynamic>?> createBooking(String addressId, String paymentMethod, {String? couponCode}) async {
+  static Future<Map<String, dynamic>?> createBooking(String addressId, String paymentMethod, {String? couponCode, String? paymentId}) async {
     try {
       final token = await getToken();
       if (token == null) return null;
@@ -585,8 +686,11 @@ class ApiService {
       if (couponCode != null && couponCode.isNotEmpty) {
         body['coupon_code'] = couponCode;
       }
+      if (paymentId != null && paymentId.isNotEmpty) {
+        body['payment_id'] = paymentId;
+      }
 
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$baseUrl/bookings'),
         headers: {
           'Content-Type': 'application/json',
@@ -609,7 +713,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return {'success': false, 'message': 'Please login first'};
 
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$baseUrl/payments/create-order'),
         headers: {
           'Content-Type': 'application/json',
@@ -644,7 +748,7 @@ class ApiService {
       final token = await getToken();
       if (token == null) return {'success': false, 'message': 'Please login first'};
 
-      final response = await http.post(
+      final response = await _post(
         Uri.parse('$baseUrl/payments/verify'),
         headers: {
           'Content-Type': 'application/json',

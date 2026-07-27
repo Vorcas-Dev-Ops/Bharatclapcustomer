@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'otp_screen.dart';
+import 'email_login_screen.dart';
 import '../../services/api_service.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -112,14 +113,14 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const SizedBox(height: 40),
               Container(
-                height: MediaQuery.of(context).size.height * 0.4,
+                height: MediaQuery.of(context).size.height * 0.38,
                 padding: const EdgeInsets.all(20),
                 child: Image.asset(
                   'assets/images/login_illustration.png',
                   fit: BoxFit.contain,
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
               const Text(
                 'Get Started',
                 style: TextStyle(
@@ -136,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.grey,
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -216,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               Row(
                 children: [
                   Expanded(child: Divider(color: Colors.grey.shade300)),
@@ -227,7 +228,37 @@ class _LoginScreenState extends State<LoginScreen> {
                   Expanded(child: Divider(color: Colors.grey.shade300)),
                 ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const EmailLoginScreen()),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF1B1464),
+                    side: BorderSide(color: Colors.grey.shade300),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.email_outlined, color: Color(0xFF1B1464), size: 22),
+                  label: const Text(
+                    'Continue with Email',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1B1464),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 height: 50,

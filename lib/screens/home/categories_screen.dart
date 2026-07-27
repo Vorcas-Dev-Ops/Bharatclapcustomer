@@ -491,11 +491,3 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 }
-
-class _CategoryData {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  _CategoryData(this.title, this.subtitle, this.icon);
-}

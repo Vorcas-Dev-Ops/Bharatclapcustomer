@@ -4,7 +4,6 @@ import '../profile/profile_screen.dart';
 import '../../services/api_service.dart';
 import 'services_screen.dart';
 import 'beauty_services_screen.dart';
-import '../address/map_screen.dart';
 import '../address/add_address_screen.dart';
 import 'search_screen.dart';
 import '../cart/cart_screen.dart';
