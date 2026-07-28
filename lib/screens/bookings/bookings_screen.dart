@@ -52,7 +52,13 @@ class _BookingsScreenState extends State<BookingsScreen> {
         return status == 'pending' || status == 'accepted' || status == 'provider_searching';
       } else if (_selectedTab == 1) {
         // Ongoing
-        return status == 'in_progress' || status == 'started' || status == 'ongoing';
+        return status == 'in_progress' ||
+            status == 'started' ||
+            status == 'ongoing' ||
+            status == 'on_the_way' ||
+            status == 'arrived' ||
+            status == 'waiting_start_otp' ||
+            status == 'waiting_end_otp';
       } else {
         // Completed
         return status == 'completed' || status == 'cancelled';

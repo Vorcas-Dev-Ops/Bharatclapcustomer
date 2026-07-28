@@ -111,7 +111,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                 ),
               ),
             ),
-            if (_bookingData['status'] == 'in_progress' || _bookingData['status'] == 'accepted')
+            if (['accepted', 'on_the_way', 'arrived', 'waiting_start_otp', 'in_progress', 'waiting_end_otp'].contains(_bookingData['status']))
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -135,7 +135,12 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const TrackServiceScreen()),
+                          MaterialPageRoute(
+                            builder: (context) => TrackServiceScreen(
+                              bookingId: widget.bookingId,
+                              booking: _bookingData,
+                            ),
+                          ),
                         );
                       },
                       style: ElevatedButton.styleFrom(

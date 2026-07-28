@@ -556,6 +556,32 @@ class ApiService {
     }
   }
 
+  // Get Notifications
+  static Future<List<dynamic>> getNotifications() async {
+    try {
+      final token = await getToken();
+      if (token == null) return [];
+
+      final response = await _get(
+        Uri.parse('$baseUrl/notifications'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data != null && data['data'] is List) {
+          return data['data'];
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
   // Cart APIs
   static Future<Map<String, dynamic>?> getCart() async {
     try {
