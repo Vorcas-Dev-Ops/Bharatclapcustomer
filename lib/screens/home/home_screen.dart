@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'service_details_screen.dart';
 import 'categories_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../services/api_service.dart';
@@ -439,26 +440,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: TextField(
-        readOnly: true,
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SearchScreen()),
-          );
-        },
-        decoration: InputDecoration(
-          icon: Icon(Icons.search, color: Colors.grey.shade500),
-          hintText: 'Search for services...',
-          hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SearchScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: IgnorePointer(
+          child: TextField(
+            readOnly: true,
+            decoration: InputDecoration(
+              icon: Icon(Icons.search, color: Colors.grey.shade500),
+              hintText: 'Search for services...',
+              hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+          ),
         ),
       ),
     );
@@ -608,7 +613,15 @@ class _HomeScreenState extends State<HomeScreen> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         const Text('Popular Services', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
-        const Text('See More', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1B1464))),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SearchScreen()),
+            );
+          },
+          child: const Text('See More', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1B1464))),
+        ),
       ],
     );
   }
@@ -627,65 +640,92 @@ class _HomeScreenState extends State<HomeScreen> {
         separatorBuilder: (context, index) => const SizedBox(width: 16),
         itemBuilder: (context, index) {
           final service = _apiPopularServices[index];
-          String title = service['service_name'] ?? 'Service';
-          String rating = (service['avg_rating'] ?? 0.0).toString();
-          String price = '₹${service['base_price'] ?? 0}';
-          
-          String? imageUrl = service['image'] as String?;
-          if (imageUrl == null || imageUrl.isEmpty) {
-            if (service['images'] != null && service['images'].isNotEmpty) {
-              imageUrl = service['images'][0];
-            }
-          }
-          
-          String imagePath = (imageUrl != null && imageUrl.isNotEmpty) 
-              ? imageUrl 
-              : 'assets/images/service_repair.png';
-          
-          return _buildServiceCard(title, rating, price, imagePath);
+          return _buildServiceCard(service);
         },
       ),
     );
   }
 
-  Widget _buildServiceCard(String title, String rating, String price, String imagePath) {
+  Widget _buildServiceCard(dynamic service) {
+    String title = service['service_name'] ?? 'Service';
+    String rating = (service['avg_rating'] ?? 0.0).toString();
+    String price = '₹${service['base_price'] ?? 0}';
+    
+    String? imageUrl = service['image'] as String?;
+    if (imageUrl == null || imageUrl.isEmpty) {
+      if (service['images'] != null && service['images'].isNotEmpty) {
+        imageUrl = service['images'][0];
+      }
+    }
+    
+    String imagePath = (imageUrl != null && imageUrl.isNotEmpty) 
+        ? imageUrl 
+        : 'assets/images/service_repair.png';
+
+    String? categoryId;
+    if (service['category_id'] is Map) {
+      categoryId = service['category_id']['_id'];
+    } else if (service['category_id'] is String) {
+      categoryId = service['category_id'];
+    }
+
     bool isNetwork = imagePath.startsWith('http');
-    return Container(
-      width: 160,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, spreadRadius: 0)],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: isNetwork 
-                ? Image.network(imagePath, height: 110, width: double.infinity, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 110, color: Colors.grey.shade200))
-                : Image.asset(imagePath, height: 110, width: double.infinity, fit: BoxFit.cover),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.star, color: Colors.amber, size: 14),
-                    const SizedBox(width: 4),
-                    Text(rating, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Text('From $price', style: const TextStyle(fontSize: 12, color: Color(0xFF1B1464), fontWeight: FontWeight.w600)),
-              ],
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ServiceDetailsScreen(
+              subserviceId: service['_id'],
+              categoryId: categoryId,
+              title: title,
+              price: price,
+              rating: rating,
+              time: service['duration']?.toString() ?? '45',
+              imagePath: imagePath,
+              description: service['description'],
             ),
           ),
-        ],
+        );
+      },
+      child: Container(
+        width: 160,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, spreadRadius: 0)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: isNetwork 
+                  ? Image.network(imagePath, height: 110, width: double.infinity, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(height: 110, color: Colors.grey.shade200))
+                  : Image.asset(imagePath, height: 110, width: double.infinity, fit: BoxFit.cover),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 14),
+                      const SizedBox(width: 4),
+                      Text(rating, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Text('From $price', style: const TextStyle(fontSize: 12, color: Color(0xFF1B1464), fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -714,29 +754,46 @@ class _HomeScreenState extends State<HomeScreen> {
     final buttonText = banner['button_text'] ?? 'Book Now >';
     final imageUrl = banner['image_url'];
 
-    return Container(
-      width: MediaQuery.of(context).size.width - 40,
-      padding: const EdgeInsets.all(20),
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1464),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Stack(
-        children: [
-          // Background illustration image
-          if (imageUrl != null && imageUrl.toString().isNotEmpty)
-            Positioned(
-              right: -20,
-              bottom: -20,
-              child: Opacity(
-                opacity: 0.8,
-                child: Image.network(
-                  imageUrl,
-                  height: 120,
-                  width: 120,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Image.asset(
+    return GestureDetector(
+      onTap: () => _handleBannerTap(banner),
+      child: Container(
+        width: MediaQuery.of(context).size.width - 40,
+        padding: const EdgeInsets.all(20),
+        clipBehavior: Clip.hardEdge,
+        decoration: BoxDecoration(
+          color: const Color(0xFF1B1464),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Stack(
+          children: [
+            // Background illustration image
+            if (imageUrl != null && imageUrl.toString().isNotEmpty)
+              Positioned(
+                right: -20,
+                bottom: -20,
+                child: Opacity(
+                  opacity: 0.8,
+                  child: Image.network(
+                    imageUrl,
+                    height: 120,
+                    width: 120,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Image.asset(
+                      'assets/images/promo_banner.png',
+                      height: 120,
+                      width: 120,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              )
+            else
+              Positioned(
+                right: -20,
+                bottom: -20,
+                child: Opacity(
+                  opacity: 0.8,
+                  child: Image.asset(
                     'assets/images/promo_banner.png',
                     height: 120,
                     width: 120,
@@ -744,57 +801,239 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-            )
-          else
-            Positioned(
-              right: -20,
-              bottom: -20,
-              child: Opacity(
-                opacity: 0.8,
-                child: Image.asset(
-                  'assets/images/promo_banner.png',
-                  height: 120,
-                  width: 120,
-                  fit: BoxFit.cover,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (subtitle.toString().isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(subtitle, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                  ),
+                if (subtitle.toString().isNotEmpty)
+                  const SizedBox(height: 12),
+                Text(
+                  title, 
+                  style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.2),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => _handleBannerTap(banner),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF1B1464),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
-          Column(
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _handleBannerTap(dynamic banner) {
+    final title = (banner['title'] ?? '').toString().toLowerCase();
+    final subtitle = (banner['subtitle'] ?? '').toString().toLowerCase();
+    final redirectType = banner['redirect_type']?.toString();
+    final redirectId = banner['redirect_id']?.toString();
+
+    if (redirectType == 'category' && redirectId != null && redirectId.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ServicesScreen(
+            categoryId: redirectId,
+            categoryName: banner['title'] ?? 'Services',
+          ),
+        ),
+      );
+      return;
+    } else if (redirectType == 'service' && redirectId != null && redirectId.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ServiceDetailsScreen(
+            subserviceId: redirectId,
+            title: banner['title'] ?? 'Service',
+            price: '₹999',
+            rating: '4.8',
+            imagePath: banner['image_url'] ?? 'assets/images/service_repair.png',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (title.contains('loan') || title.contains('borrow') || subtitle.contains('loan') || (title.contains('pay') && title.contains('help'))) {
+      final loanCatId = _getCategoryId('loan') ?? _getCategoryId('finance') ?? _getCategoryId('business');
+      if (loanCatId != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ServicesScreen(
+              categoryId: loanCatId,
+              categoryName: 'Business & Service Loans',
+            ),
+          ),
+        );
+      } else {
+        _showLoanModal();
+      }
+    } else if (title.contains('clean')) {
+      final cleanCatId = _getCategoryId('clean');
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ServicesScreen(
+            categoryId: cleanCatId,
+            categoryName: 'Cleaning & Pest',
+          ),
+        ),
+      );
+    } else if (title.contains('women') || title.contains('beauty')) {
+      final beautyCatId = _getCategoryId('beauty') ?? _getCategoryId('salon');
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => BeautyServicesScreen(
+            categoryId: beautyCatId ?? '',
+            categoryName: 'Womens Salon',
+            gender: 'Women',
+          ),
+        ),
+      );
+    } else {
+      setState(() {
+        _currentIndex = 1;
+      });
+    }
+  }
+
+  void _showLoanModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (subtitle.toString().isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF1B1464), size: 28),
+                      SizedBox(width: 12),
+                      Text(
+                        'Instant Service Loan',
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
+                      ),
+                    ],
                   ),
-                  child: Text(subtitle, style: const TextStyle(color: Colors.white, fontSize: 12)),
-                ),
-              if (subtitle.toString().isNotEmpty)
-                const SizedBox(height: 12),
-              Text(
-                title, 
-                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold, height: 1.2),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.grey),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  // Navigation can be handled based on redirect_type
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF1B1464),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1B1464).withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF1B1464).withOpacity(0.15)),
                 ),
-                child: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold)),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Flexible Payment Options',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF1B1464)),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'Split payments for high-value services into small, easy monthly installments starting at 0% interest for eligible accounts.',
+                      style: TextStyle(fontSize: 13, color: Colors.black87, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text('Features & Benefits', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              _buildLoanFeature(Icons.flash_on_outlined, 'Instant Approval', 'Get approved within minutes with minimal documentation.'),
+              const SizedBox(height: 10),
+              _buildLoanFeature(Icons.calendar_month_outlined, 'Flexible Tenure', 'Choose between 3, 6, 12, or 24 months EMI.'),
+              const SizedBox(height: 10),
+              _buildLoanFeature(Icons.verified_user_outlined, 'Zero Hidden Charges', 'Transparent processing with no extra fee.'),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    final loanCatId = _getCategoryId('loan') ?? _getCategoryId('finance');
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ServicesScreen(
+                          categoryId: loanCatId,
+                          categoryName: 'Business Loan & Financing',
+                        ),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B1464),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text(
+                    'Apply Now',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildLoanFeature(IconData icon, String title, String desc) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: const Color(0xFF1B1464), size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 2),
+              Text(desc, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

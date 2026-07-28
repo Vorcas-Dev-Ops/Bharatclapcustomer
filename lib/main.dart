@@ -6,6 +6,8 @@ import 'services/api_service.dart';
 
 import 'services/server_error_handler.dart';
 
+import 'services/notification_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -13,6 +15,7 @@ void main() async {
   } catch (e) {
     debugPrint("Failed to load .env file: $e");
   }
+  await NotificationService.init();
   final isLoggedIn = await ApiService.isLoggedIn();
   runApp(MyApp(isLoggedIn: isLoggedIn));
 }

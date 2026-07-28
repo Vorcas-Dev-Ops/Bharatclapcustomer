@@ -45,13 +45,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   Future<void> _fetchData() async {
-    if (widget.categoryId == null) {
-      setState(() => _isLoading = false);
-      return;
-    }
-    
-    final servicesData = await ApiService.getServices(widget.categoryId!);
-    final subServicesData = await ApiService.getSubServicesByCategory(widget.categoryId!);
+    final catId = widget.categoryId;
+    final servicesData = await ApiService.getServices(catId);
+    final subServicesData = await ApiService.getSubServicesByCategory(catId);
 
     if (mounted) {
       setState(() {

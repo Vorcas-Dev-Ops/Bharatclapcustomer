@@ -113,10 +113,23 @@ class ApiService {
     return profile != null && profile['_id'] != null && profile['_id'] != 'pending_verification';
   }
 
+  // Helper to sanitize phone number by stripping +91, +, spaces, and formatting
+  static String cleanPhone(String phone) {
+    String cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)]+'), '');
+    if (cleaned.startsWith('+91')) {
+      cleaned = cleaned.substring(3);
+    } else if (cleaned.startsWith('91') && cleaned.length > 10) {
+      cleaned = cleaned.substring(2);
+    } else if (cleaned.startsWith('+')) {
+      cleaned = cleaned.substring(1);
+    }
+    return cleaned.trim();
+  }
+
   // Send OTP
   static Future<Map<String, dynamic>> sendOtp(String phone) async {
     try {
-      final identifier = phone.trim();
+      final identifier = cleanPhone(phone);
 
       final response = await _post(
         Uri.parse('$baseUrl/users/send-otp'),
@@ -139,7 +152,7 @@ class ApiService {
   // Verify OTP
   static Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
     try {
-      final identifier = phone.trim();
+      final identifier = cleanPhone(phone);
 
       final response = await _post(
         Uri.parse('$baseUrl/users/verify-otp'),
@@ -170,7 +183,7 @@ class ApiService {
   // Register User
   static Future<Map<String, dynamic>> registerUser(String phone, String name, [String? email, String? gender]) async {
     try {
-      final Map<String, dynamic> body = {'phone': phone.trim(), 'name': name};
+      final Map<String, dynamic> body = {'phone': cleanPhone(phone), 'name': name};
       if (email != null && email.isNotEmpty) {
         body['email'] = email;
       }
@@ -442,11 +455,21 @@ class ApiService {
   }
 
   // Get Services by Category
-  static Future<List<dynamic>> getServices(String categoryId, {String? gender}) async {
+  static Future<List<dynamic>> getServices(String? categoryId, {String? gender}) async {
     try {
-      String url = '$baseUrl/services?category_id=$categoryId';
-      if (gender != null) {
-        url += '&gender=${gender.toLowerCase()}';
+      String url = '$baseUrl/services';
+      List<String> params = [];
+      if (categoryId != null &&
+          categoryId.isNotEmpty &&
+          categoryId != 'all' &&
+          RegExp(r'^[0-9a-fA-F]{24}$').hasMatch(categoryId)) {
+        params.add('category_id=$categoryId');
+      }
+      if (gender != null && gender.isNotEmpty) {
+        params.add('gender=${gender.toLowerCase()}');
+      }
+      if (params.isNotEmpty) {
+        url += '?${params.join('&')}';
       }
       final response = await _get(Uri.parse(url));
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -462,9 +485,16 @@ class ApiService {
   }
 
   // Get Sub-services by Category
-  static Future<List<dynamic>> getSubServicesByCategory(String categoryId) async {
+  static Future<List<dynamic>> getSubServicesByCategory(String? categoryId) async {
     try {
-      final response = await _get(Uri.parse('$baseUrl/sub-services?category_id=$categoryId'));
+      String url = '$baseUrl/sub-services';
+      if (categoryId != null &&
+          categoryId.isNotEmpty &&
+          categoryId != 'all' &&
+          RegExp(r'^[0-9a-fA-F]{24}$').hasMatch(categoryId)) {
+        url += '?category_id=$categoryId';
+      }
+      final response = await _get(Uri.parse(url));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
