@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../auth/login_screen.dart';
 import '../../services/api_service.dart';
 import '../address/saved_addresses_screen.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -187,13 +188,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: Color(0xFF1B1464),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Column(
                   children: [
                     _buildContactPill(Icons.phone_outlined, phone),
                     if (email.isNotEmpty && email != 'No Email') ...[
-                      const SizedBox(width: 12),
+                      const SizedBox(height: 8),
                       _buildContactPill(Icons.email_outlined, email),
                     ],
                   ],
@@ -206,13 +205,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Positioned(
               right: 0,
               top: 0,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF3F4F8),
-                  shape: BoxShape.circle,
+              child: GestureDetector(
+                onTap: () async {
+                  final updated = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EditProfileScreen(userProfile: _userProfile),
+                    ),
+                  );
+                  if (updated == true) {
+                    _loadUserProfile();
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF3F4F8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.edit, size: 16, color: Color(0xFF1B1464)),
                 ),
-                child: const Icon(Icons.edit, size: 16, color: Color(0xFF1B1464)),
               ),
             ),
         ],

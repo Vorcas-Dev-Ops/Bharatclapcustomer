@@ -58,7 +58,7 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
     setState(() => _isLoading = true);
     try {
       final googleSignIn = GoogleSignIn(
-        clientId: dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'],
+        serverClientId: dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'],
         scopes: ['email', 'profile'],
       );
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
@@ -131,31 +131,31 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  height: MediaQuery.of(context).size.height * 0.3,
-                  padding: const EdgeInsets.all(20),
+                  height: MediaQuery.of(context).size.height * 0.29,
+                  padding: const EdgeInsets.all(8),
                   child: Image.asset(
                     'assets/images/login_illustration.png',
                     fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 8),
                 const Text(
                   'Get Started',
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF1B1464),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 const Text(
                   "Choose how you'd like to continue",
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: Colors.grey,
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 14),
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(

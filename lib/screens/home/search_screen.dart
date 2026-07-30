@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import 'service_details_screen.dart';
 import '../../providers/cart_state.dart';
+import '../../widgets/slot_selection_modal.dart';
+import '../../widgets/app_toast.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -113,7 +115,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildServiceCard(dynamic ss) {
-    final title = ss['subservice_name'] ?? 'Unknown';
+    final title = ss['name'] ?? ss['subservice_name'] ?? ss['service_name'] ?? ss['title'] ?? 'Unknown';
     final rating = (ss['avg_rating'] ?? 4.8).toString();
     final time = ss['duration']?.toString() ?? '45';
     final price = '₹${ss['base_price'] ?? 199}';
@@ -257,58 +259,70 @@ class _SearchScreenState extends State<SearchScreen> {
                             color: Color(0xFF1B1464),
                           ),
                         ),
-                        SizedBox(
-                          height: 32,
-                          child: OutlinedButton(
-                            onPressed: () async {
-                              final subserviceId = ss['_id']?.toString();
-                              if (subserviceId != null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Adding $title to cart...')),
-                                );
-                                final addresses = await ApiService.getAddresses();
-                                final currentAddress = addresses.isNotEmpty ? addresses.first : null;
-                                final rawLoc = currentAddress?['area_locality'] ?? currentAddress?['city'] ?? currentAddress?['address_line_1'] ?? 'Bangalore';
-                                final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
+                        ValueListenableBuilder<Map<String, dynamic>?>(
+                          valueListenable: CartState.cartData,
+                          builder: (context, cartData, child) {
+                            final subserviceId = ss['_id']?.toString();
+                            final inCart = CartState.isItemInCart(subserviceId);
 
-                                final data = await ApiService.addToCart(
-                                  subserviceId, 
-                                  1, 
-                                  currentAddress?['_id'], 
-                                  locName
-                                );
-                                if (!mounted) return;
-                                if (data != null && data['success'] == true) {
-                                  CartState.cartData.value = data;
-                                  CartState.updateCount(data);
-                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('$title added to cart!')),
-                                  );
-                                } else {
-                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(data?['message'] ?? 'Failed to add $title to cart')),
-                                  );
-                                }
-                              }
-                            },
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              side: BorderSide(color: Colors.grey.shade300),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                            return SizedBox(
+                              height: 32,
+                              child: OutlinedButton(
+                                onPressed: () async {
+                                  if (subserviceId != null) {
+                                    if (inCart) {
+                                      SlotSelectionModal.show(context, subserviceId, title);
+                                      return;
+                                    }
+                                    final addresses = await ApiService.getAddresses();
+                                    final currentAddress = addresses.isNotEmpty ? addresses.first : null;
+                                    final rawLoc = currentAddress?['area_locality'] ?? currentAddress?['city'] ?? currentAddress?['address_line_1'] ?? 'Bangalore';
+                                    final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
+
+                                    final data = await ApiService.addToCart(
+                                      subserviceId, 
+                                      1, 
+                                      currentAddress?['_id'], 
+                                      locName
+                                    );
+                                    if (!mounted) return;
+                                    if (data != null && data['success'] == true) {
+                                      CartState.cartData.value = data;
+                                      CartState.updateCount(data);
+                                      SlotSelectionModal.show(context, subserviceId, title);
+                                    } else {
+                                      AppToast.show(context, data?['message'] ?? 'Failed to add $title to cart', isError: true);
+                                    }
+                                  }
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  backgroundColor: inCart ? Colors.green.shade50 : Colors.white,
+                                  side: BorderSide(color: inCart ? Colors.green : Colors.grey.shade300),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (inCart) ...[
+                                      const Icon(Icons.check, size: 14, color: Colors.green),
+                                      const SizedBox(width: 4),
+                                    ],
+                                    Text(
+                                      inCart ? 'Added' : 'Add',
+                                      style: TextStyle(
+                                        color: inCart ? Colors.green.shade700 : const Color(0xFF1B1464),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            child: const Text(
-                              'Add',
-                              style: TextStyle(
-                                color: Color(0xFF1B1464),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
+                            );
+                          },
                         ),
                       ],
                     ),

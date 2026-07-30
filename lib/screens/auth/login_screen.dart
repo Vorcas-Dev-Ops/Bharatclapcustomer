@@ -21,7 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       final googleSignIn = GoogleSignIn(
-        clientId: dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'],
+        serverClientId: dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'],
         scopes: ['email', 'profile'],
       );
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
@@ -111,20 +111,20 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
               Container(
-                height: MediaQuery.of(context).size.height * 0.38,
-                padding: const EdgeInsets.all(20),
+                height: MediaQuery.of(context).size.height * 0.29,
+                padding: const EdgeInsets.all(8),
                 child: Image.asset(
                   'assets/images/login_illustration.png',
                   fit: BoxFit.contain,
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 20),
               const Text(
                 'Get Started',
                 style: TextStyle(
-                  fontSize: 28,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF1B1464),
                 ),
@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   color: Colors.grey,
                 ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -153,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(12),
@@ -176,20 +176,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.phone,
                       decoration: InputDecoration(
                         hintText: 'Enter your mobile number',
-                        hintStyle: TextStyle(color: Colors.grey.shade400),
+                        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
                         filled: true,
                         fillColor: Colors.grey.shade100,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -217,18 +217,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
               Row(
                 children: [
                   Expanded(child: Divider(color: Colors.grey.shade300)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('OR', style: TextStyle(color: Colors.grey.shade400)),
+                    child: Text('OR', style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
                   ),
                   Expanded(child: Divider(color: Colors.grey.shade300)),
                 ],
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -258,7 +258,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -288,7 +288,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
             ],
           ),
         ),

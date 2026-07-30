@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'services_screen.dart';
 import 'beauty_services_screen.dart';
+import 'search_screen.dart';
+import 'service_details_screen.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
 import '../../providers/cart_state.dart';
+import '../../widgets/slot_selection_modal.dart';
+import '../../widgets/app_toast.dart';
 
 class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({super.key});
@@ -16,12 +20,23 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   List<dynamic> _apiCategories = [];
+  List<dynamic> _apiPopularServices = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _fetchCategories();
+    _fetchPopularServices();
+  }
+
+  Future<void> _fetchPopularServices() async {
+    final services = await ApiService.getPopularServices();
+    if (mounted) {
+      setState(() {
+        _apiPopularServices = services;
+      });
+    }
   }
 
   Future<void> _fetchCategories() async {
@@ -35,7 +50,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Future<void> _refreshCategories() async {
-    await _fetchCategories();
+    await Future.wait([
+      _fetchCategories(),
+      _fetchPopularServices(),
+    ]);
   }
 
   @override
@@ -130,19 +148,27 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Widget _buildSearchBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.search, color: Colors.grey.shade500),
-          const SizedBox(width: 12),
-          Text('Search for any service...', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
-        ],
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SearchScreen()),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.search, color: Colors.grey.shade500),
+            const SizedBox(width: 12),
+            Text('Search for any service...', style: TextStyle(color: Colors.grey.shade500, fontSize: 14)),
+          ],
+        ),
       ),
     );
   }
@@ -306,12 +332,20 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             color: Colors.black87,
           ),
         ),
-        const Text(
-          'See More',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF1B1464),
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SearchScreen()),
+            );
+          },
+          child: const Text(
+            'See More',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF1B1464),
+            ),
           ),
         ),
       ],
@@ -319,98 +353,258 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Widget _buildMostBookedServices() {
+    if (_apiPopularServices.isEmpty) {
+      return SizedBox(
+        height: 235,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          clipBehavior: Clip.none,
+          children: [
+            _buildMostBookedCard({
+              'service_name': 'AC Repair',
+              'avg_rating': 4.8,
+              'base_price': 499,
+              'image': 'assets/images/service_repair.png',
+            }),
+            const SizedBox(width: 16),
+            _buildMostBookedCard({
+              'service_name': 'Fan Replacement',
+              'avg_rating': 4.8,
+              'base_price': 499,
+              'image': 'assets/images/service_repair.png',
+            }),
+          ],
+        ),
+      );
+    }
+
     return SizedBox(
-      height: 250,
-      child: ListView(
+      height: 235,
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
-        children: [
-          _buildMostBookedCard('AC Repair', '4.8', '₹499', 'assets/images/service_repair.png'),
-          const SizedBox(width: 16),
-          _buildMostBookedCard('Fan Replacement', '4.8', '₹499', 'assets/images/service_repair.png'), // Will replace image path later
-        ],
+        itemCount: _apiPopularServices.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 16),
+        itemBuilder: (context, index) {
+          final service = _apiPopularServices[index];
+          return _buildMostBookedCard(service);
+        },
       ),
     );
   }
 
-  Widget _buildMostBookedCard(String title, String rating, String price, String imagePath) {
-    return Container(
-      width: 180,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 10,
-            spreadRadius: 0,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            child: Image.asset(
-              imagePath,
-              height: 120,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                 return Container(
-                   height: 120,
-                   width: double.infinity,
-                   color: Colors.grey.shade200,
-                   child: const Icon(Icons.image, color: Colors.grey),
-                 );
-              },
+  Widget _buildMostBookedCard(dynamic service) {
+    String? subserviceId = service['_id']?.toString();
+    String title = service['name'] ?? service['subservice_name'] ?? service['service_name'] ?? service['title'] ?? 'Service';
+    String rating = (service['avg_rating'] ?? 4.8).toString();
+    String price = '₹${service['base_price'] ?? 499}';
+
+    String? imageUrl = service['image'] as String?;
+    if (imageUrl == null || imageUrl.isEmpty) {
+      if (service['images'] != null && service['images'].isNotEmpty) {
+        imageUrl = service['images'][0];
+      }
+    }
+
+    String imagePath = (imageUrl != null && imageUrl.isNotEmpty)
+        ? imageUrl
+        : 'assets/images/service_repair.png';
+
+    bool isNetwork = imagePath.startsWith('http');
+
+    String? categoryId;
+    if (service['category_id'] is Map) {
+      categoryId = service['category_id']['_id']?.toString();
+    } else if (service['category_id'] is String) {
+      categoryId = service['category_id'];
+    }
+
+    return GestureDetector(
+      onTap: () {
+        if (subserviceId != null && subserviceId.isNotEmpty) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ServiceDetailsScreen(
+                subserviceId: subserviceId,
+                categoryId: categoryId,
+                title: title,
+                price: price,
+                rating: rating,
+                time: service['duration']?.toString() ?? '45',
+                imagePath: imagePath,
+                description: service['description'],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade50,
-                        borderRadius: BorderRadius.circular(4),
+          );
+        }
+      },
+      child: Container(
+        width: 175,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.02),
+              blurRadius: 10,
+              spreadRadius: 0,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              child: isNetwork
+                  ? Image.network(
+                      imagePath,
+                      height: 110,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        height: 110,
+                        width: double.infinity,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image, color: Colors.grey),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.star, color: Colors.green.shade600, size: 12),
-                          const SizedBox(width: 2),
-                          Text(rating, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green.shade600)),
-                        ],
+                    )
+                  : Image.asset(
+                      imagePath,
+                      height: 110,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        height: 110,
+                        width: double.infinity,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image, color: Colors.grey),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text('Add', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 8),
-                Text('From $price', style: const TextStyle(fontSize: 13, color: Color(0xFF1B1464), fontWeight: FontWeight.bold)),
-              ],
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.star, color: Colors.green.shade600, size: 12),
+                            const SizedBox(width: 2),
+                            Text(
+                              rating,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ValueListenableBuilder<Map<String, dynamic>?>(
+                        valueListenable: CartState.cartData,
+                        builder: (context, cartData, child) {
+                          final inCart = CartState.isItemInCart(subserviceId);
+                          return GestureDetector(
+                            onTap: () {
+                              if (inCart && subserviceId != null) {
+                                SlotSelectionModal.show(context, subserviceId, title);
+                              } else {
+                                _handleAddToCart(service);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: inCart ? Colors.green.shade50 : const Color(0xFF1B1464).withOpacity(0.08),
+                                border: Border.all(color: inCart ? Colors.green : const Color(0xFF1B1464)),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (inCart) ...[
+                                    const Icon(Icons.check, size: 12, color: Colors.green),
+                                    const SizedBox(width: 2),
+                                  ],
+                                  Text(
+                                    inCart ? 'Added' : 'Add',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: inCart ? Colors.green.shade700 : const Color(0xFF1B1464),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    title,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'From $price',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF1B1464),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _handleAddToCart(dynamic service) async {
+    String? subserviceId = service['_id']?.toString();
+    if (subserviceId == null || subserviceId.isEmpty) {
+      AppToast.show(context, 'Cannot add this service to cart', isError: true);
+      return;
+    }
+
+    String title = service['name'] ?? service['subservice_name'] ?? service['service_name'] ?? service['title'] ?? 'Service';
+
+    final data = await ApiService.addToCart(subserviceId, 1, null, null);
+
+    if (mounted) {
+      if (data != null && data['success'] == true) {
+        CartState.cartData.value = data;
+        CartState.updateCount(data);
+        SlotSelectionModal.show(context, subserviceId, title);
+      } else {
+        if (data?['message'] == 'Please login first' || data?['message'] == 'Please Login first') {
+          AppToast.show(context, 'Please login to add items to cart', isError: true);
+        } else {
+          AppToast.show(context, data?['message'] ?? 'Failed to add item to cart', isError: true);
+        }
+      }
+    }
   }
 
   void _showMenWomenDialog(BuildContext context, String categoryId, String categoryName) {

@@ -3,6 +3,8 @@ import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
 import '../../providers/cart_state.dart';
 import '../auth/login_screen.dart';
+import '../../widgets/slot_selection_modal.dart';
+import '../../widgets/app_toast.dart';
 
 class ServiceDetailsScreen extends StatefulWidget {
   final String? subserviceId;
@@ -266,88 +268,106 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                       color: Color(0xFF1B1464),
                     ),
                   ),
-                  InkWell(
-                    onTap: () async {
-                      if (widget.subserviceId != null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Adding ${widget.title} to cart...')),
-                        );
-                        final rawLoc = _currentAddress?['area_locality'] ?? _currentAddress?['city'] ?? _currentAddress?['address_line_1'] ?? 'Bangalore';
-                        final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
+                  ValueListenableBuilder<Map<String, dynamic>?>(
+                    valueListenable: CartState.cartData,
+                    builder: (context, cartData, child) {
+                      final inCart = CartState.isItemInCart(widget.subserviceId);
 
-                        final data = await ApiService.addToCart(
-                          widget.subserviceId!, 
-                          1, 
-                          _currentAddress?['_id'], 
-                          locName
-                        );
-                        if (data != null && data['success'] == true) {
-                          CartState.cartData.value = data;
-                          CartState.updateCount(data);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('${widget.title} added to cart!')),
-                            );
-                          }
-                        } else {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                            
-                            if (data?['message'] == 'Please login first' || data?['message'] == 'Please Login first') {
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  title: const Text('Login Required', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
-                                  content: const Text('Please login to add items to your cart.', style: TextStyle(fontSize: 15)),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        Navigator.pop(context);
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(builder: (context) => const LoginScreen()),
-                                        );
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF1B1464),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                      child: const Text('Login', style: TextStyle(color: Colors.white)),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
-                              );
+                      return InkWell(
+                        onTap: () async {
+                          if (widget.subserviceId != null) {
+                            if (inCart) {
+                              SlotSelectionModal.show(context, widget.subserviceId!, widget.title);
+                              return;
+                            }
+
+                             final rawLoc = _currentAddress?['area_locality'] ?? _currentAddress?['city'] ?? _currentAddress?['address_line_1'] ?? 'Bangalore';
+                             final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
+
+                             final data = await ApiService.addToCart(
+                               widget.subserviceId!, 
+                               1, 
+                               _currentAddress?['_id'], 
+                               locName
+                             );
+                             if (data != null && data['success'] == true) {
+                               CartState.cartData.value = data;
+                               CartState.updateCount(data);
+                               if (context.mounted) {
+                                 SlotSelectionModal.show(context, widget.subserviceId!, widget.title);
+                               }
+                             } else {
+                               if (context.mounted) {
+                                 if (data?['message'] == 'Please login first' || data?['message'] == 'Please Login first') {
+                                   showDialog(
+                                     context: context,
+                                     builder: (context) => AlertDialog(
+                                       shape: RoundedRectangleBorder(
+                                         borderRadius: BorderRadius.circular(16),
+                                       ),
+                                       title: const Text('Login Required', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
+                                       content: const Text('Please login to add items to your cart.', style: TextStyle(fontSize: 15)),
+                                       actions: [
+                                         TextButton(
+                                           onPressed: () => Navigator.pop(context),
+                                           child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
+                                         ),
+                                         ElevatedButton(
+                                           onPressed: () {
+                                             Navigator.pop(context);
+                                             Navigator.push(
+                                               context,
+                                               MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                             );
+                                           },
+                                           style: ElevatedButton.styleFrom(
+                                             backgroundColor: const Color(0xFF1B1464),
+                                             shape: RoundedRectangleBorder(
+                                               borderRadius: BorderRadius.circular(8),
+                                             ),
+                                           ),
+                                           child: const Text('Login', style: TextStyle(color: Colors.white)),
+                                         ),
+                                       ],
+                                     ),
+                                   );
+                                 } else {
+                                   AppToast.show(context, data?['message'] ?? 'Failed to add to cart.', isError: true);
+                                 }
+                              }
                             }
                           }
-                        }
-                      }
+                        },
+                        child: Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: inCart ? Colors.green.shade50 : Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: inCart ? Colors.green : const Color(0xFFE8E8FF), width: 1.5),
+                          ),
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (inCart) ...[
+                                  const Icon(Icons.check, size: 16, color: Colors.green),
+                                  const SizedBox(width: 6),
+                                ],
+                                Text(
+                                  inCart ? 'Added to Cart' : 'Add to Cart',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: inCart ? Colors.green.shade700 : const Color(0xFF1B1464),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
                     },
-                    child: Container(
-                      height: 36,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE8E8FF), width: 1.5),
-                      ),
-                      child: const Center(
-                        child: Text('Add to Cart', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
-                      ),
-                    ),
                   ),
                 ],
               ),

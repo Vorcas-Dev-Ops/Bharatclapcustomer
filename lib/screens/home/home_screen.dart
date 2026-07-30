@@ -41,7 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final bookings = await ApiService.getMyBookings();
     if (mounted) {
       setState(() {
-        _apiRecentBookings = bookings;
+        _apiRecentBookings = bookings.take(5).toList();
       });
     }
   }
@@ -99,10 +99,103 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: _buildBody(),
-      bottomNavigationBar: _buildBottomNavigationBar(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldExit = await showDialog<bool>(
+          context: context,
+          builder: (context) => Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF0FF),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.exit_to_app_rounded,
+                      color: Color(0xFF1B1464),
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Leave BharathClap?',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B1464),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Are you sure you want to exit the app?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(false),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            side: const BorderSide(color: Color(0xFF1B1464)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text(
+                            'Stay',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1B1464),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.of(context).pop(true),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            backgroundColor: const Color(0xFF1B1464),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text(
+                            'Exit',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        if (shouldExit == true && context.mounted) {
+          // ignore: use_build_context_synchronously
+          Navigator.of(context).pop(true);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: _buildBody(),
+        bottomNavigationBar: _buildBottomNavigationBar(),
+      ),
     );
   }
 
@@ -511,8 +604,8 @@ class _HomeScreenState extends State<HomeScreen> {
     
     if (missingCount > 0) {
       for (var cat in _apiCategories) {
-        String id = cat['_id'];
-        if (!usedCategoryIds.contains(id)) {
+        String? id = cat['_id']?.toString() ?? cat['id']?.toString();
+        if (id != null && id.isNotEmpty && !usedCategoryIds.contains(id)) {
           String name = cat['category_name'] ?? 'Category';
           String displayName = name;
           if (displayName.length > 10 && displayName.contains(' ')) {
@@ -647,7 +740,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildServiceCard(dynamic service) {
-    String title = service['service_name'] ?? 'Service';
+    String title = service['name'] ?? service['subservice_name'] ?? service['service_name'] ?? service['title'] ?? 'Service';
     String rating = (service['avg_rating'] ?? 0.0).toString();
     String price = '₹${service['base_price'] ?? 0}';
     
@@ -1043,7 +1136,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildRecentBookings() {
     return Column(
-      children: _apiRecentBookings.map((booking) {
+      children: _apiRecentBookings.take(5).map((booking) {
         String title = 'Service';
         if (booking['subservice_id'] != null && booking['subservice_id']['subservice_name'] != null) {
           title = booking['subservice_id']['subservice_name'];

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../providers/cart_state.dart';
 import 'slot_selection_screen.dart';
+import 'payment_selection_screen.dart';
 import '../address/add_address_screen.dart';
 import '../home/categories_screen.dart';
+import '../../widgets/slot_selection_modal.dart';
+import '../../widgets/app_toast.dart';
 
 class CartScreen extends StatefulWidget {
   final bool useSingleCategoryDesign;
@@ -58,19 +62,52 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _updateQuantity(String subserviceId, int newQuantity) async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
-    Map<String, dynamic>? data;
-    if (newQuantity <= 0) {
-      data = await ApiService.removeFromCart(subserviceId);
-    } else {
-      data = await ApiService.updateCartItem(subserviceId, newQuantity);
+
+    try {
+      final cartData = CartState.cartData.value;
+      final rawItems = (cartData?['items'] as List<dynamic>?) ?? [];
+
+      int duplicateCount = 0;
+      for (var item in rawItems) {
+        final sub = item['subservice_id'];
+        final id = sub is Map ? sub['_id']?.toString() : sub?.toString();
+        if (id == subserviceId) {
+          duplicateCount++;
+        }
+      }
+
+      Map<String, dynamic>? data;
+
+      if (duplicateCount > 1) {
+        await ApiService.removeFromCart(subserviceId);
+        if (newQuantity > 0) {
+          final rawLoc = _currentAddress?['area_locality'] ?? _currentAddress?['city'] ?? _currentAddress?['address_line_1'] ?? 'Bangalore';
+          final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
+          data = await ApiService.addToCart(subserviceId, newQuantity, _currentAddress?['_id'], locName);
+        } else {
+          data = await ApiService.getCart();
+        }
+      } else {
+        if (newQuantity <= 0) {
+          data = await ApiService.removeFromCart(subserviceId);
+        } else {
+          data = await ApiService.updateCartItem(subserviceId, newQuantity);
+        }
+      }
+
+      if (data != null) {
+        CartState.cartData.value = data;
+        CartState.updateCount(data);
+      }
+    } catch (e) {
+      debugPrint('Error updating quantity: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-    
-    if (data != null) {
-      CartState.cartData.value = data;
-      CartState.updateCount(data);
-    }
-    setState(() => _isLoading = false);
   }
 
   Future<void> _addRecommendedService(dynamic service) async {
@@ -79,10 +116,6 @@ class _CartScreenState extends State<CartScreen> {
 
     final rawLoc = _currentAddress?['area_locality'] ?? _currentAddress?['city'] ?? _currentAddress?['address_line_1'] ?? 'Bangalore';
     final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Adding ${service['subservice_name'] ?? service['service_name'] ?? 'service'} to cart...')),
-    );
 
     setState(() => _isLoading = true);
     final data = await ApiService.addToCart(
@@ -97,15 +130,10 @@ class _CartScreenState extends State<CartScreen> {
       if (data != null && data['success'] == true) {
         CartState.cartData.value = data;
         CartState.updateCount(data);
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${service['subservice_name'] ?? service['service_name']} added to cart!')),
-        );
+        final title = service['name'] ?? service['subservice_name'] ?? service['service_name'] ?? service['title'] ?? 'Service';
+        SlotSelectionModal.show(context, subserviceId.toString(), title);
       } else {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data?['message'] ?? 'Failed to add item')),
-        );
+        AppToast.show(context, data?['message'] ?? 'Failed to add item', isError: true);
       }
     }
   }
@@ -255,10 +283,35 @@ class _CartScreenState extends State<CartScreen> {
       );
       return;
     }
+
+    final cartData = CartState.cartData.value;
+    final totalAmount = (cartData?['total_amount'] as num?)?.toDouble() ?? 0.0;
+
+    String selectedDate = '';
+    String selectedTime = '';
+    if (cartData != null && cartData['items'] != null && (cartData['items'] as List).isNotEmpty) {
+      final firstItem = cartData['items'][0];
+      selectedDate = firstItem['scheduled_date']?.toString() ?? firstItem['date']?.toString() ?? '';
+      selectedTime = firstItem['scheduled_time']?.toString() ?? firstItem['time_slot']?.toString() ?? '';
+    }
+
+    if (selectedDate.isEmpty) {
+      selectedDate = DateTime.now().toString().split(' ')[0];
+    }
+    if (selectedTime.isEmpty) {
+      selectedTime = '02:00 PM';
+    }
     
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => SlotSelectionScreen(addressId: _currentAddress!['_id'])),
+      MaterialPageRoute(
+        builder: (context) => PaymentSelectionScreen(
+          addressId: _currentAddress!['_id'],
+          selectedDate: selectedDate,
+          selectedTime: selectedTime,
+          totalAmount: totalAmount,
+        ),
+      ),
     );
   }
 
@@ -352,7 +405,7 @@ class _CartScreenState extends State<CartScreen> {
                           child: _isLoading 
                             ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : const Text(
-                            'Select Slot',
+                            'Proceed to Checkout',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -487,7 +540,36 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildCartItemsList(List<dynamic> items) {
+  List<dynamic> _deduplicateCartItems(List<dynamic> items) {
+    final Map<String, dynamic> combined = {};
+    for (var item in items) {
+      final subservice = item['subservice_id'];
+      if (subservice == null) continue;
+
+      final id = subservice is Map ? subservice['_id']?.toString() : subservice.toString();
+      if (id == null || id.isEmpty) continue;
+
+      if (!combined.containsKey(id)) {
+        combined[id] = Map<String, dynamic>.from(item as Map<String, dynamic>);
+      } else {
+        final existing = combined[id] as Map<String, dynamic>;
+        final q1 = (existing['quantity'] as num?)?.toInt() ?? 1;
+        final q2 = (item['quantity'] as num?)?.toInt() ?? 1;
+        existing['quantity'] = q1 + q2;
+
+        if (item['selected_date'] != null && item['selected_date'].toString().isNotEmpty) {
+          existing['selected_date'] = item['selected_date'];
+        }
+        if (item['selected_time_slot'] != null && item['selected_time_slot'].toString().isNotEmpty) {
+          existing['selected_time_slot'] = item['selected_time_slot'];
+        }
+      }
+    }
+    return combined.values.toList();
+  }
+
+  Widget _buildCartItemsList(List<dynamic> rawItems) {
+    final items = _deduplicateCartItems(rawItems);
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.all(16),
@@ -557,21 +639,40 @@ class _CartScreenState extends State<CartScreen> {
     final subservice = item['subservice_id'];
     if (subservice == null) return const SizedBox.shrink();
 
-    final title = subservice['subservice_name'] ?? 'Unknown Service';
+    final title = subservice['subservice_name'] ?? subservice['name'] ?? subservice['service_name'] ?? 'Unknown Service';
     final price = item['price_snapshot'] ?? subservice['base_price'] ?? 0;
     final quantity = item['quantity'] ?? 1;
-    final subserviceId = subservice['_id'];
+    final subserviceId = subservice is Map ? subservice['_id']?.toString() : subservice.toString();
     final imagePath = subservice['image'] ?? '';
+
+    final selectedDate = item['selected_date']?.toString();
+    final selectedTimeSlot = item['selected_time_slot']?.toString();
+
+    String slotText = 'Select time slot';
+    bool hasSlot = false;
+    if (selectedDate != null && selectedDate.isNotEmpty && selectedTimeSlot != null && selectedTimeSlot.isNotEmpty) {
+      hasSlot = true;
+      try {
+        final parsedDate = DateTime.parse(selectedDate);
+        final formattedDate = DateFormat('EEE, d MMM').format(parsedDate);
+        slotText = '$formattedDate at $selectedTimeSlot';
+      } catch (_) {
+        slotText = '$selectedDate at $selectedTimeSlot';
+      }
+    } else if (selectedTimeSlot != null && selectedTimeSlot.isNotEmpty) {
+      hasSlot = true;
+      slotText = selectedTimeSlot;
+    }
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (imagePath.isNotEmpty) ...[
+          if (imagePath.toString().isNotEmpty) ...[
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: imagePath.startsWith('http')
+              child: imagePath.toString().startsWith('http')
                   ? Image.network(
                       imagePath,
                       height: 50,
@@ -595,17 +696,58 @@ class _CartScreenState extends State<CartScreen> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
+                ),
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () {
+                    if (subserviceId != null) {
+                      SlotSelectionModal.show(context, subserviceId, title);
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: hasSlot ? const Color(0xFF1B1464).withOpacity(0.06) : Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: hasSlot ? const Color(0xFF1B1464).withOpacity(0.15) : Colors.amber.shade300),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.calendar_today,
+                          size: 11,
+                          color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          slotText,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Icon(
+                          Icons.edit,
+                          size: 10,
+                          color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '₹${price.toInt()}',
+                '₹${(price as num).toInt()}',
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
               ),
               const SizedBox(height: 8),
@@ -621,7 +763,7 @@ class _CartScreenState extends State<CartScreen> {
                   children: [
                     InkWell(
                       onTap: () {
-                        if (!_isLoading) _updateQuantity(subserviceId, quantity - 1);
+                        if (!_isLoading && subserviceId != null) _updateQuantity(subserviceId, quantity - 1);
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8.0),
@@ -634,7 +776,7 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                     InkWell(
                       onTap: () {
-                        if (!_isLoading) _updateQuantity(subserviceId, quantity + 1);
+                        if (!_isLoading && subserviceId != null) _updateQuantity(subserviceId, quantity + 1);
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 8.0),
@@ -794,16 +936,47 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    InkWell(
-                      onTap: () => _addRecommendedService(service),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFFE8E8FF), width: 1.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text('Add', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
-                      ),
+                    ValueListenableBuilder<Map<String, dynamic>?>(
+                      valueListenable: CartState.cartData,
+                      builder: (context, cartData, child) {
+                        final subserviceId = service['_id']?.toString();
+                        final inCart = CartState.isItemInCart(subserviceId);
+
+                        return InkWell(
+                          onTap: () {
+                            if (inCart && subserviceId != null) {
+                              SlotSelectionModal.show(context, subserviceId, title);
+                            } else {
+                              _addRecommendedService(service);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: inCart ? Colors.green.shade50 : Colors.white,
+                              border: Border.all(color: inCart ? Colors.green : const Color(0xFFE8E8FF), width: 1.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (inCart) ...[
+                                  const Icon(Icons.check, size: 10, color: Colors.green),
+                                  const SizedBox(width: 2),
+                                ],
+                                Text(
+                                  inCart ? 'Added' : 'Add',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: inCart ? Colors.green.shade700 : const Color(0xFF1B1464),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),

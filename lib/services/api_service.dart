@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
 import 'server_error_handler.dart';
+import '../providers/cart_state.dart';
 
 class ApiService {
   static String get baseUrl {
@@ -385,10 +386,52 @@ class ApiService {
     }
   }
 
-  // Get Popular Services
+  // Update User Profile
+  static Future<Map<String, dynamic>> updateUserProfile({
+    String? name,
+    String? phone,
+    String? email,
+    String? currentPassword,
+    String? newPassword,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {'success': false, 'message': 'Not authenticated'};
+      }
+
+      final Map<String, dynamic> body = {};
+      if (name != null && name.trim().isNotEmpty) body['name'] = name.trim();
+      if (phone != null && phone.trim().isNotEmpty) body['phone'] = cleanPhone(phone);
+      if (email != null && email.trim().isNotEmpty) body['email'] = email.trim();
+      if (currentPassword != null && currentPassword.isNotEmpty) {
+        body['currentPassword'] = currentPassword;
+      }
+      if (newPassword != null && newPassword.isNotEmpty) {
+        body['newPassword'] = newPassword;
+      }
+
+      final response = await _put(
+        Uri.parse('$baseUrl/users/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body);
+      data['success'] = response.statusCode == 200 || response.statusCode == 201;
+      return data;
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get Popular Services (Sub-services)
   static Future<List<dynamic>> getPopularServices() async {
     try {
-      final response = await _get(Uri.parse('$baseUrl/services'));
+      final response = await _get(Uri.parse('$baseUrl/sub-services'));
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         if (data is List) {
@@ -556,6 +599,31 @@ class ApiService {
     }
   }
 
+  // Cancel Booking
+  static Future<Map<String, dynamic>?> cancelBooking(String bookingId, String reason) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
+      final response = await _put(
+        Uri.parse('$baseUrl/bookings/$bookingId/cancel'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'reason': reason}),
+      );
+
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true, 'message': decoded['message'] ?? 'Booking cancelled successfully', 'booking': decoded['booking']};
+      }
+      return {'success': false, 'message': decoded['message'] ?? 'Failed to cancel booking'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // Get Notifications
   static Future<List<dynamic>> getNotifications() async {
     try {
@@ -608,6 +676,16 @@ class ApiService {
     try {
       final token = await getToken();
       if (token == null) return {'success': false, 'message': 'Please login first'};
+
+      if (CartState.isItemInCart(subserviceId)) {
+        int currentQty = CartState.getItemQuantity(subserviceId);
+        int newQty = currentQty + quantity;
+        final updateRes = await updateCartItem(subserviceId, newQty);
+        if (updateRes != null) {
+          updateRes['success'] = true;
+          return updateRes;
+        }
+      }
 
       final response = await _post(
         Uri.parse('$baseUrl/cart/add'),
