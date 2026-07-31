@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart';
-import 'server_error_handler.dart';
 import '../providers/cart_state.dart';
 
 class ApiService {
@@ -17,17 +16,13 @@ class ApiService {
   }
 
   static void _checkResponse(http.Response response) {
-    if (response.statusCode == 503 || response.statusCode == 502 || response.statusCode == 504) {
-      ServerErrorHandler.handle503Error(
-        message: 'Server is currently unavailable (${response.statusCode}). Please try again later.',
-      );
+    if (response.statusCode >= 500) {
+      debugPrint('[ApiService] Server response status: ${response.statusCode}');
     }
   }
 
   static void _handleError(Object e) {
-    ServerErrorHandler.handle503Error(
-      message: 'Unable to communicate with the server. Please check your network or try again later.',
-    );
+    debugPrint('[ApiService] Connection error: $e');
   }
 
   static Future<http.Response> _get(Uri url, {Map<String, String>? headers}) async {
@@ -696,8 +691,8 @@ class ApiService {
         body: jsonEncode({
           'subservice_id': subserviceId,
           'quantity': quantity,
-          if (locationId != null) 'location_id': locationId,
-          if (locationName != null) 'location_name': locationName,
+          'location_id': ?locationId,
+          'location_name': ?locationName,
         }),
       );
       
@@ -893,7 +888,7 @@ class ApiService {
           'razorpay_payment_id': razorpayPaymentId,
           'razorpay_signature': razorpaySignature,
           'amount': amount,
-          if (bookingId != null) 'booking_id': bookingId,
+          'booking_id': ?bookingId,
         }),
       );
 

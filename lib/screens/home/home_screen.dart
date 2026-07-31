@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'service_details_screen.dart';
 import 'categories_screen.dart';
@@ -9,6 +11,10 @@ import '../address/add_address_screen.dart';
 import 'search_screen.dart';
 import '../cart/cart_screen.dart';
 import '../bookings/bookings_screen.dart';
+import '../bookings/booking_details_screen.dart';
+import '../notifications_screen.dart';
+import '../../services/notification_service.dart';
+import '../../services/notification_sync_service.dart';
 import '../../providers/cart_state.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -26,15 +32,57 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _apiRecentBookings = [];
   Map<String, dynamic>? _currentAddress;
   List<dynamic> _addresses = [];
+  StreamSubscription<String>? _notificationSub;
 
   @override
   void initState() {
     super.initState();
+    NotificationSyncService.startSync();
+    _notificationSub = NotificationService.selectNotificationStream.stream.listen((payload) {
+      _handleNotificationClick(payload);
+    });
     _fetchCategories();
     _fetchAddress();
     _fetchBanners();
     _fetchPopularServices();
     _fetchRecentBookings();
+  }
+
+  @override
+  void dispose() {
+    _notificationSub?.cancel();
+    NotificationSyncService.stopSync();
+    super.dispose();
+  }
+
+  void _handleNotificationClick(String payload) {
+    try {
+      Map<String, dynamic> data = {};
+      if (payload.startsWith('{')) {
+        data = jsonDecode(payload);
+      }
+      final bookingId = data['booking_id'] ?? data['bookingId'] ?? data['booking'];
+      if (bookingId != null && bookingId.toString().isNotEmpty && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => BookingDetailsScreen(bookingId: bookingId.toString()),
+          ),
+        );
+      } else if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+        );
+      }
+    }
   }
 
   Future<void> _fetchRecentBookings() async {
@@ -339,6 +387,47 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+        // Notification Bell Icon with dynamic red dot indicator
+        GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const NotificationsScreen()),
+            ).then((_) => NotificationSyncService.fetchAndUpdate());
+          },
+          child: ValueListenableBuilder<int>(
+            valueListenable: NotificationSyncService.unreadCountNotifier,
+            builder: (context, unreadCount, child) {
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.notifications_none_outlined, color: Color(0xFF1B1464)),
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 2,
+                      top: 2,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
         const SizedBox(width: 12),

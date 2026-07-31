@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
+import '../services/notification_sync_service.dart';
+import 'bookings/booking_details_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -109,7 +111,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       onRefresh: _fetchNotifications,
                       child: ListView.separated(
                         itemCount: _notifications.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (context, index) => const Divider(height: 1),
                         itemBuilder: (context, index) {
                           final item = _notifications[index];
                           final isRead = item['is_read'] ?? false;
@@ -131,6 +133,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             onTap: () {
                               if (!isRead) {
                                 _markAsRead(item['_id']);
+                                NotificationSyncService.fetchAndUpdate();
+                              }
+                              final metadata = item['metadata'];
+                              if (metadata != null && metadata is Map && metadata['booking_id'] != null) {
+                                final bId = metadata['booking_id'].toString();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => BookingDetailsScreen(bookingId: bId),
+                                  ),
+                                );
                               }
                             },
                           );

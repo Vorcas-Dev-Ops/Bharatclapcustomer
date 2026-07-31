@@ -107,6 +107,11 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      child: _buildPaymentMethodCard(),
+                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -122,7 +127,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, -4),
                       ),
@@ -281,7 +286,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                             widget.bookingId,
                             reasonController.text.trim().isEmpty ? 'Customer requested cancellation' : reasonController.text.trim(),
                           );
-                          if (mounted) {
+                          if (context.mounted) {
                             Navigator.pop(context);
                             if (result != null && result['success'] == true) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -603,6 +608,93 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                   ),
                 ]
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isCOD() {
+    if (_bookingData == null) return false;
+    final method = (_bookingData['payment_method'] ?? _bookingData['payment_type'] ?? _bookingData['paymentMethod'] ?? '').toString().toLowerCase();
+    final pStatus = (_bookingData['payment_status'] ?? _bookingData['paymentStatus'] ?? '').toString().toLowerCase();
+
+    if (method == 'cod' || method == 'cash' || method == 'cash_on_delivery' || method.contains('cod')) {
+      return true;
+    }
+    if (method == 'online' || method == 'razorpay' || method == 'upi' || method == 'card' || pStatus == 'paid' || pStatus == 'completed') {
+      return false;
+    }
+    return pStatus != 'paid' && pStatus != 'completed';
+  }
+
+  Widget _buildPaymentMethodCard() {
+    final isCOD = _isCOD();
+    final amount = _bookingData['payable_amount']?.toString() ?? _bookingData['total_amount']?.toString() ?? '0';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isCOD ? const Color(0xFFFFF8E1) : const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isCOD ? const Color(0xFFFFE082) : const Color(0xFFA5D6A7),
+          width: 1.2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    isCOD ? Icons.payments_outlined : Icons.check_circle_rounded,
+                    color: isCOD ? const Color(0xFFE65100) : const Color(0xFF2E7D32),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'PAYMENT METHOD',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: isCOD ? const Color(0xFFE65100) : const Color(0xFF2E7D32),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isCOD ? const Color(0xFFFFB74D) : const Color(0xFF66BB6A),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isCOD ? 'CASH ON DELIVERY' : 'ONLINE PAID',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            isCOD
+                ? 'Please pay ₹$amount in Cash to the service provider after the job is completed.'
+                : 'Payment of ₹$amount has been completed online via Razorpay / UPI.',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: isCOD ? const Color(0xFF5D4037) : const Color(0xFF1B5E20),
+              height: 1.4,
             ),
           ),
         ],
