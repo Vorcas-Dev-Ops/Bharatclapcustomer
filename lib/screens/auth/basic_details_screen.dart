@@ -24,6 +24,34 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
   void initState() {
     super.initState();
     _numberController.text = widget.phone;
+    _fetchExistingProfile();
+  }
+
+  Future<void> _fetchExistingProfile() async {
+    try {
+      final user = await ApiService.getUserProfile();
+      if (user != null && mounted) {
+        setState(() {
+          if (user['name'] != null && user['name'].toString().isNotEmpty) {
+            _nameController.text = user['name'].toString();
+          }
+          if (user['email'] != null && user['email'].toString().isNotEmpty) {
+            _emailController.text = user['email'].toString();
+          }
+          if (user['phone'] != null && user['phone'].toString().isNotEmpty) {
+            _numberController.text = user['phone'].toString();
+          }
+          if (user['gender'] != null && user['gender'].toString().isNotEmpty) {
+            final genderStr = user['gender'].toString();
+            if (_genders.contains(genderStr)) {
+              _selectedGender = genderStr;
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching existing customer profile: $e');
+    }
   }
 
   @override

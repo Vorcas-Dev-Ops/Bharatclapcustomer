@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import '../../services/api_service.dart';
+import '../../providers/cart_state.dart';
+import 'package:intl/intl.dart';
+import 'payment_selection_screen.dart';
 
 class SlotSelectionScreen extends StatefulWidget {
-  const SlotSelectionScreen({super.key});
+  final String addressId;
+  const SlotSelectionScreen({super.key, required this.addressId});
 
   @override
   State<SlotSelectionScreen> createState() => _SlotSelectionScreenState();
@@ -10,13 +15,9 @@ class SlotSelectionScreen extends StatefulWidget {
 class _SlotSelectionScreenState extends State<SlotSelectionScreen> {
   int _selectedDateIndex = 0;
   int _selectedTimeIndex = 4; // Default to 02:00 PM matching the image
+  bool _isLoading = false;
 
-  final List<Map<String, String>> _dates = [
-    {'day': 'Fri', 'date': '12'},
-    {'day': 'Sat', 'date': '13'},
-    {'day': 'Sun', 'date': '14'},
-    {'day': 'Mon', 'date': '15'},
-  ];
+  late List<DateTime> _dates;
 
   final List<String> _times = [
     '10:00 AM',
@@ -31,6 +32,70 @@ class _SlotSelectionScreenState extends State<SlotSelectionScreen> {
     '07:00 PM',
     '08:00 PM',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _generateDates();
+  }
+
+  void _generateDates() {
+    _dates = List.generate(4, (index) => DateTime.now().add(Duration(days: index)));
+  }
+
+  Future<void> _handleCheckout() async {
+    if (_isLoading) return;
+    
+    final cartData = CartState.cartData.value;
+    if (cartData == null || cartData['items'] == null || (cartData['items'] as List).isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cart is empty')));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final selectedDate = DateFormat('yyyy-MM-dd').format(_dates[_selectedDateIndex]);
+      final selectedTime = _times[_selectedTimeIndex];
+      final totalAmount = (cartData['total_amount'] as num?)?.toDouble() ?? 0.0;
+
+      final items = cartData['items'] as List;
+
+      // Update slots for all items
+      for (var item in items) {
+        final subserviceId = item['subservice_id'];
+        if (subserviceId != null) {
+          final id = subserviceId['_id']?.toString() ?? subserviceId.toString();
+          await ApiService.updateSlot(id, selectedDate, selectedTime);
+        }
+      }
+
+      // Navigate to Payment Method Selection Screen
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PaymentSelectionScreen(
+              addressId: widget.addressId,
+              selectedDate: selectedDate,
+              selectedTime: selectedTime,
+              totalAmount: totalAmount,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating slot: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,20 +157,16 @@ class _SlotSelectionScreenState extends State<SlotSelectionScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Checkout successful!')),
-                      );
-                      // Navigate back to home or success screen
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                    },
+                    onPressed: _isLoading ? null : _handleCheckout,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1B1464),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
+                    child: _isLoading 
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Text(
                       'Checkout',
                       style: TextStyle(
                         color: Colors.white,
@@ -150,6 +211,10 @@ class _SlotSelectionScreenState extends State<SlotSelectionScreen> {
     return Row(
       children: List.generate(_dates.length, (index) {
         bool isSelected = _selectedDateIndex == index;
+        final date = _dates[index];
+        final dayStr = DateFormat('E').format(date);
+        final dateStr = DateFormat('d').format(date);
+        
         return GestureDetector(
           onTap: () {
             setState(() {
@@ -170,7 +235,7 @@ class _SlotSelectionScreenState extends State<SlotSelectionScreen> {
             child: Column(
               children: [
                 Text(
-                  _dates[index]['day']!,
+                  dayStr,
                   style: TextStyle(
                     fontSize: 12,
                     color: isSelected ? const Color(0xFF1B1464) : Colors.grey.shade600,
@@ -178,7 +243,7 @@ class _SlotSelectionScreenState extends State<SlotSelectionScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _dates[index]['date']!,
+                  dateStr,
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,

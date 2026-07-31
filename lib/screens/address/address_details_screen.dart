@@ -3,7 +3,28 @@ import '../home/home_screen.dart';
 import '../../services/api_service.dart';
 
 class AddressDetailsScreen extends StatefulWidget {
-  const AddressDetailsScreen({super.key});
+  final String? addressLine;
+  final String? city;
+  final String? state;
+  final String? pincode;
+  final String? district;
+  final String? country;
+  final double? latitude;
+  final double? longitude;
+  final String? formattedAddress;
+
+  const AddressDetailsScreen({
+    super.key,
+    this.addressLine,
+    this.city,
+    this.state,
+    this.pincode,
+    this.district,
+    this.country,
+    this.latitude,
+    this.longitude,
+    this.formattedAddress,
+  });
 
   @override
   State<AddressDetailsScreen> createState() => _AddressDetailsScreenState();
@@ -23,6 +44,10 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    _addressController.text = widget.addressLine ?? '';
+    _cityController.text = widget.city ?? '';
+    _stateController.text = widget.state ?? '';
+    _pincodeController.text = widget.pincode ?? '';
     _fetchUserDetails();
   }
 
@@ -63,11 +88,23 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
     setState(() => _isLoading = true);
 
     final response = await ApiService.addAddress({
-      'address_line': _addressController.text.trim(),
+      'address_type': _selectedAddressType,
+      'label': _selectedAddressType,
+      'house_no_building': _addressController.text.trim(),
+      'address_line_1': widget.addressLine ?? 'Street Address',
+      'area_locality': widget.addressLine ?? 'Locality',
       'city': _cityController.text.trim(),
+      'district': widget.district ?? _cityController.text.trim(),
       'state': _stateController.text.trim(),
+      'country': widget.country ?? 'India',
       'pincode': _pincodeController.text.trim(),
-      'landmark': _selectedAddressType,
+      'latitude': widget.latitude ?? 0.0,
+      'longitude': widget.longitude ?? 0.0,
+      'location': {
+        'type': 'Point',
+        'coordinates': [widget.longitude ?? 0.0, widget.latitude ?? 0.0],
+      },
+      'formatted_address': widget.formattedAddress ?? '${_addressController.text.trim()}, ${widget.addressLine ?? ""}, ${_cityController.text.trim()}, ${_stateController.text.trim()}',
     });
 
     if (mounted) {
@@ -134,13 +171,17 @@ class _AddressDetailsScreenState extends State<AddressDetailsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'P and T Layout, Horamavu',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                          Text(
+                            (widget.addressLine != null && widget.addressLine!.isNotEmpty)
+                                ? widget.addressLine!
+                                : 'P and T Layout, Horamavu',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Bengaluru, Karnataka',
+                            (widget.city != null && widget.city!.isNotEmpty)
+                                ? '${widget.city}, ${widget.state ?? ""}'
+                                : 'Bengaluru, Karnataka',
                             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                           ),
                         ],

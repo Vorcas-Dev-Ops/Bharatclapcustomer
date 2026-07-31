@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
+import '../../providers/cart_state.dart';
+import '../auth/login_screen.dart';
+import '../../widgets/slot_selection_modal.dart';
 
 class BeautyServicesScreen extends StatefulWidget {
   final String categoryId;
@@ -23,39 +26,98 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
   List<dynamic> _services = [];
   String _searchQuery = '';
   int _selectedFilterIndex = 1; // 1 represents 'All'
+  bool _showPackagesList = true;
+  String? _selectedTier;
 
   List<Map<String, dynamic>> _filters = [];
+  Map<String, dynamic>? _currentAddress;
 
   @override
   void initState() {
     super.initState();
-    if (widget.gender == 'Men') {
-      _filters = [
-        {'icon': Icons.bolt, 'title': 'Instant', 'isInstant': true},
-        {'icon': Icons.business, 'title': 'All', 'isInstant': false},
-        {'icon': Icons.spa, 'title': 'Spa', 'isInstant': false},
-        {'icon': Icons.content_cut, 'title': 'Hair Salon', 'isInstant': false},
-      ];
-    } else {
-      _filters = [
-        {'icon': Icons.bolt, 'title': 'Instant', 'isInstant': true},
-        {'icon': Icons.business, 'title': 'All', 'isInstant': false},
-        {'icon': Icons.spa, 'title': 'Spa', 'isInstant': false},
-        {'icon': Icons.face_retouching_natural, 'title': 'Salon', 'isInstant': false},
-        {'icon': Icons.content_cut, 'title': 'Hair cut', 'isInstant': false},
-        {'icon': Icons.brush, 'title': 'Makeup', 'isInstant': false},
-      ];
-    }
+    _fetchAddress();
     _fetchServices();
+  }
+
+  IconData _getIconForService(String name) {
+    final lowerName = name.toLowerCase();
+    if (lowerName.contains('spa')) return Icons.spa;
+    if (lowerName.contains('hair') || lowerName.contains('cut')) return Icons.content_cut;
+    if (lowerName.contains('makeup')) return Icons.brush;
+    if (lowerName.contains('massage')) return Icons.self_improvement;
+    if (lowerName.contains('facial') || lowerName.contains('salon')) return Icons.face_retouching_natural;
+    return Icons.business;
+  }
+
+  String? _getAssetIconForService(String name) {
+    final lowerName = name.toLowerCase();
+    final isMen = widget.gender.toLowerCase() == 'men';
+    
+    if (isMen) {
+      if (lowerName.contains('hair') || lowerName.contains('cut')) return 'assets/catogries/beauty/men/mhaircut.png';
+      if (lowerName.contains('wax')) return 'assets/catogries/beauty/men/wax.png';
+    } else {
+      if (lowerName.contains('hair') || lowerName.contains('cut')) return 'assets/catogries/beauty/women/whaircut.png';
+      if (lowerName.contains('massage') || lowerName.contains('spa')) return 'assets/catogries/beauty/women/massage.png';
+      if (lowerName.contains('facial') || lowerName.contains('makeup') || lowerName.contains('cleanup')) return 'assets/catogries/beauty/women/facial.png';
+      if (lowerName.contains('pedicure') || lowerName.contains('manicure')) return 'assets/catogries/beauty/women/pedicure.png';
+    }
+    return null;
+  }
+
+  Future<void> _fetchAddress() async {
+    final addresses = await ApiService.getAddresses();
+    if (mounted && addresses.isNotEmpty) {
+      setState(() {
+        _currentAddress = addresses.first;
+      });
+    }
   }
 
   Future<void> _fetchServices() async {
     setState(() => _isLoading = true);
     try {
-      final subServices = await ApiService.getSubServicesByCategory(widget.categoryId);
+      // 1. Fetch all Services for this category
+      final allServices = await ApiService.getServices(widget.categoryId);
+      
+      // Filter locally for gender applicability (allow matching gender, or if it's missing/unisex)
+      final services = allServices.where((s) {
+        final g = (s['genderApplicability'] ?? '').toString().toLowerCase();
+        return g.isEmpty || g == 'unisex' || g == 'both' || g == widget.gender.toLowerCase();
+      }).toList();
+
+      final validServiceIds = services.map((s) => s['_id'].toString()).toSet();
+
+      // 2. Fetch all SubServices for this category
+      final allSubServices = await ApiService.getSubServicesByCategory(widget.categoryId);
+      
+      // 3. Filter SubServices to only include those belonging to the valid services
+      final filteredSubServices = allSubServices.where((subService) {
+        final serviceInfo = subService['service_id'];
+        if (serviceInfo == null) return false;
+        final serviceId = serviceInfo is Map ? serviceInfo['_id'].toString() : serviceInfo.toString();
+        return validServiceIds.contains(serviceId);
+      }).toList();
+
+      final List<Map<String, dynamic>> newFilters = [
+        {'icon': Icons.bolt, 'title': 'Instant', 'isInstant': true},
+        {'icon': Icons.business, 'assetIcon': 'assets/catogries/all.png', 'title': 'All', 'isInstant': false},
+      ];
+      for (var service in services) {
+        final title = service['service_name']?.toString() ?? 'Unknown';
+        newFilters.add({
+          'icon': _getIconForService(title),
+          'assetIcon': _getAssetIconForService(title),
+          'title': title,
+          'isInstant': false,
+          'id': service['_id'].toString(),
+        });
+      }
+
       if (mounted) {
         setState(() {
-          _services = subServices;
+          _services = filteredSubServices;
+          _filters = newFilters;
           _isLoading = false;
         });
       }
@@ -116,11 +178,41 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
       ];
     }
     
-    // If we have real data, filter it by search query
-    return _services.where((s) {
-      final title = (s['title'] ?? '').toLowerCase();
+    // Filter by search query and selected category tab
+    var result = _services.where((s) {
+      final title = (s['title'] ?? s['subservice_name'] ?? '').toLowerCase();
       return title.contains(_searchQuery.toLowerCase());
     }).toList();
+
+    if (_selectedFilterIndex > 0 && _selectedFilterIndex < _filters.length) {
+      final selectedFilter = _filters[_selectedFilterIndex];
+      final filterTitle = selectedFilter['title'].toString().toLowerCase();
+      if (filterTitle != 'all') {
+         result = result.where((s) {
+            if (selectedFilter.containsKey('id')) {
+              final serviceInfo = s['service_id'];
+              final serviceId = serviceInfo is Map ? serviceInfo['_id'].toString() : serviceInfo.toString();
+              return serviceId == selectedFilter['id'];
+            }
+            final title = (s['title'] ?? s['subservice_name'] ?? '').toLowerCase();
+            final desc = (s['description'] ?? '').toLowerCase();
+            return title.contains(filterTitle) || desc.contains(filterTitle);
+         }).toList();
+      }
+    }
+
+    if (_selectedTier != null && !_showPackagesList) {
+      result = result.where((s) {
+        if (s['hasPackages'] == true && s['packages'] != null) {
+          final packages = s['packages'] as List<dynamic>;
+          final hasTier = packages.any((p) => p['name']?.toString().toLowerCase() == _selectedTier!.toLowerCase());
+          return hasTier;
+        }
+        return false;
+      }).toList();
+    }
+
+    return result;
   }
 
   @override
@@ -134,9 +226,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
             _buildSearchBar(),
             _buildFiltersRow(),
             Expanded(
-              child: (_selectedFilterIndex == 0 || _selectedFilterIndex == 1) 
-                  ? _buildServiceList() 
-                  : _buildGroupedView(),
+              child: _buildServiceList(),
             ),
           ],
         ),
@@ -197,7 +287,16 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                       color: Color(0xFF1B1464),
                       shape: BoxShape.circle,
                     ),
-                    child: const Text('4', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    child: ValueListenableBuilder<int>(
+                      valueListenable: CartState.cartItemCount,
+                      builder: (context, count, child) {
+                        if (count == 0) return const SizedBox.shrink();
+                        return Text(
+                          '$count', 
+                          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                        );
+                      },
+                    ),
                   ),
                 ),
               ],
@@ -245,7 +344,11 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
           final isInstant = filter['isInstant'] == true;
 
           return GestureDetector(
-            onTap: () => setState(() => _selectedFilterIndex = index),
+            onTap: () => setState(() {
+              _selectedFilterIndex = index;
+              _showPackagesList = true;
+              _selectedTier = null;
+            }),
             child: Container(
               margin: const EdgeInsets.only(right: 12),
               width: 72,
@@ -256,11 +359,19 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    filter['icon'],
-                    color: isSelected ? Colors.white : (isInstant ? Colors.green.shade600 : Colors.grey.shade600),
-                    size: 24,
-                  ),
+                  if (filter['assetIcon'] != null)
+                    Image.asset(
+                      filter['assetIcon'],
+                      height: 24,
+                      width: 24,
+                      color: isSelected ? Colors.white : (isInstant ? Colors.green.shade600 : Colors.grey.shade600),
+                    )
+                  else
+                    Icon(
+                      filter['icon'],
+                      color: isSelected ? Colors.white : (isInstant ? Colors.green.shade600 : Colors.grey.shade600),
+                      size: 24,
+                    ),
                   const SizedBox(height: 6),
                   Text(
                     filter['title'],
@@ -280,27 +391,58 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
     );
   }
 
+  Future<void> _refreshData() async {
+    await Future.wait([
+      _fetchAddress(),
+      _fetchServices(),
+    ]);
+  }
+
   Widget _buildServiceList() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF1B1464)));
     }
 
+    if (_selectedFilterIndex > 1 && _showPackagesList) {
+      return _buildGroupedView();
+    }
+
     final services = _displayServices;
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      itemCount: services.length,
-      itemBuilder: (context, index) {
-        return _buildServiceCard(services[index]);
-      },
+    return RefreshIndicator(
+      onRefresh: _refreshData,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        itemCount: services.length,
+        itemBuilder: (context, index) {
+          return _buildServiceCard(services[index]);
+        },
+      ),
     );
   }
 
   Widget _buildServiceCard(dynamic service) {
-    String title = service['title'] ?? 'Unknown Service';
+    String title = service['title'] ?? service['subservice_name'] ?? 'Unknown Service';
     String rating = service['rating']?.toString() ?? '4.8';
     String time = service['time']?.toString() ?? '45 mins';
     int price = service['base_price'] ?? 0;
+
+    // Use tier-specific pricing if available
+    if (_selectedTier != null && service['packages'] != null) {
+      final packages = service['packages'] as List<dynamic>;
+      final tierPackage = packages.firstWhere(
+        (p) => p['name']?.toString().toLowerCase() == _selectedTier!.toLowerCase(),
+        orElse: () => null,
+      );
+      if (tierPackage != null) {
+        price = tierPackage['base_price'] ?? price;
+        if (tierPackage['duration'] != null) {
+          time = '${tierPackage['duration']} mins';
+        }
+      }
+    }
+
     String imagePath = service['image'] ?? '';
 
     bool hasImage = imagePath.isNotEmpty;
@@ -405,21 +547,112 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                         color: Color(0xFF1B1464),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text(
-                        'Add',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1B1464),
-                        ),
-                      ),
+                    ValueListenableBuilder<Map<String, dynamic>?>(
+                      valueListenable: CartState.cartData,
+                      builder: (context, cartData, child) {
+                        final subserviceId = service['_id']?.toString();
+                        final inCart = CartState.isItemInCart(subserviceId);
+
+                        return InkWell(
+                          onTap: () async {
+                            if (subserviceId != null) {
+                              if (inCart) {
+                                SlotSelectionModal.show(context, subserviceId, title);
+                                return;
+                              }
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Adding $title to cart...')),
+                              );
+                              final rawLoc = _currentAddress?['area_locality'] ?? _currentAddress?['city'] ?? _currentAddress?['address_line_1'] ?? 'Bangalore';
+                              final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
+
+                              final data = await ApiService.addToCart(
+                                subserviceId, 
+                                1, 
+                                _currentAddress?['_id'], 
+                                locName
+                              );
+                              if (data != null && data['success'] == true) {
+                                CartState.cartData.value = data;
+                                CartState.updateCount(data);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  SlotSelectionModal.show(context, subserviceId, title);
+                                }
+                              } else {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                                  
+                                  if (data?['message'] == 'Please login first' || data?['message'] == 'Please Login first') {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                        title: const Text('Login Required', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
+                                        content: const Text('Please login to add items to your cart.', style: TextStyle(fontSize: 15)),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context),
+                                            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () {
+                                              Navigator.pop(context);
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                              );
+                                            },
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: const Color(0xFF1B1464),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                            ),
+                                            child: const Text('Login', style: TextStyle(color: Colors.white)),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text(data?['message'] ?? 'Failed to add to cart.')),
+                                    );
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: inCart ? Colors.green.shade50 : Colors.white,
+                              border: Border.all(color: inCart ? Colors.green : Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (inCart) ...[
+                                  const Icon(Icons.check, size: 12, color: Colors.green),
+                                  const SizedBox(width: 4),
+                                ],
+                                Text(
+                                  inCart ? 'Added' : 'Add',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: inCart ? Colors.green.shade700 : const Color(0xFF1B1464),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -445,7 +678,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       children: [
         _buildGroupCard(
-          title: 'Premium',
+          title: 'Prime',
           description: 'Relaxing beauty treatments to refresh your body and mind.',
           rating: '4.2',
           imagePath: 'assets/images/premium_beauty.png',
@@ -467,7 +700,14 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
     required String rating,
     required String imagePath,
   }) {
-    return Container(
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedTier = title;
+          _showPackagesList = false;
+        });
+      },
+      child: Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
@@ -573,6 +813,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 }
