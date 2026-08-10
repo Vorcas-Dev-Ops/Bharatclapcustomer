@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'track_service_screen.dart';
+import 'rate_service_screen.dart';
 import '../../services/api_service.dart';
 
 class BookingDetailsScreen extends StatefulWidget {
@@ -116,7 +117,7 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                 ),
               ),
             ),
-            if (['pending', 'accepted', 'on_the_way', 'arrived', 'waiting_start_otp', 'in_progress', 'waiting_end_otp'].contains(_bookingData['status']))
+            if (['pending', 'accepted', 'on_the_way', 'arrived', 'waiting_start_otp', 'in_progress', 'waiting_end_otp', 'completed'].contains(_bookingData['status']))
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -189,6 +190,42 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                 ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_bookingData['status'] == 'completed' && _bookingData['is_reviewed'] != true)
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => RateServiceScreen(booking: _bookingData),
+                                  ),
+                                ).then((result) {
+                                  if (result == true) {
+                                    _fetchBookingData();
+                                  }
+                                });
+                              },
+                              icon: const Icon(Icons.star_rounded, color: Colors.amber),
+                              label: const Text(
+                                'Rate & Review Service',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF1B1464),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
                               ),
                             ),
                           ),

@@ -92,8 +92,16 @@ class _SlotSelectionModalState extends State<SlotSelectionModal> {
     setState(() => _isLoading = true);
 
     try {
-      final selectedDate = DateFormat('yyyy-MM-dd').format(_dates[_selectedDateIndex]);
+      final dateObj = _dates[_selectedDateIndex];
       final selectedTime = _times[_selectedTimeIndex];
+      
+      DateTime combinedDateTime = dateObj;
+      try {
+        final parsedTime = DateFormat('hh:mm a').parse(selectedTime);
+        combinedDateTime = DateTime(dateObj.year, dateObj.month, dateObj.day, parsedTime.hour, parsedTime.minute);
+      } catch (_) {}
+
+      final selectedDate = combinedDateTime.toIso8601String();
 
       final res = await ApiService.updateSlot(widget.subserviceId, selectedDate, selectedTime);
       await CartState.fetchCart();

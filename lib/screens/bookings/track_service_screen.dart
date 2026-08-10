@@ -21,11 +21,15 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
   List<dynamic> _notifications = [];
   Timer? _pollingTimer;
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _bookingData = widget.booking;
+    if (_bookingData == null) {
+      _isLoading = true;
+    }
     _fetchBookingAndNotifications();
     // Refresh every 5 seconds while tracking screen is open
     _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
@@ -41,7 +45,15 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
 
   Future<void> _fetchBookingAndNotifications() async {
     final bId = widget.bookingId ?? _bookingData?['_id'] ?? _bookingData?['id'];
-    if (bId == null || bId.toString().isEmpty) return;
+    if (bId == null || bId.toString().isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Booking ID not provided.';
+        });
+      }
+      return;
+    }
 
     try {
       final updatedBooking = await ApiService.getBookingById(bId.toString());
@@ -50,12 +62,23 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
         setState(() {
           if (updatedBooking != null) {
             _bookingData = updatedBooking;
+            _errorMessage = null;
+          } else if (_bookingData == null) {
+            _errorMessage = 'Unable to fetch booking status. Please check your connection and retry.';
           }
           _notifications = notifications;
+          _isLoading = false;
         });
       }
     } catch (e) {
-      // Quiet fallback
+      if (mounted) {
+        setState(() {
+          if (_bookingData == null) {
+            _errorMessage = 'Error loading tracking details: $e';
+          }
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -65,9 +88,10 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
     final searchKey = type == 'start' ? 'Start OTP' : 'End OTP';
 
     for (final notif in _notifications) {
+      if (notif == null || notif is! Map) continue;
       final title = notif['title']?.toString() ?? '';
       final message = notif['message']?.toString() ?? '';
-      
+
       if (title.contains(searchKey) || message.contains(searchKey)) {
         // Extract 6-digit number
         final match = RegExp(r'\b\d{6}\b').firstMatch(message);
@@ -104,34 +128,126 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
   }
 
   void _makePhoneCall(String? phoneNumber) {
-    if (phoneNumber == null || phoneNumber.isEmpty) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Calling professional: $phoneNumber')),
-    );
+    if (phoneNumber == null || phoneNumber.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number not available for this provider.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Calling professional: $phoneNumber')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to initiate call: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final status = _bookingData?['status']?.toString().toLowerCase() ?? 'accepted';
+    if (_isLoading && _bookingData == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        appBar: AppBar(
+          title: const Text('Track Service', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_errorMessage != null && _bookingData == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFFAFAFA),
+        appBar: AppBar(
+          title: const Text('Track Service', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, size: 20, color: Colors.black),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 60, color: Colors.redAccent),
+                const SizedBox(height: 16),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, color: Colors.black87),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _isLoading = true;
+                      _errorMessage = null;
+                    });
+                    _fetchBookingAndNotifications();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1B1464),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final status = _bookingData?['status']?.toString().toLowerCase() ?? 'pending';
     final currentStep = _calculateCurrentStep(status);
     final isArrived = status == 'arrived' || status == 'waiting_start_otp' || currentStep >= 3;
 
     // Provider Info
     final providerMap = _bookingData?['provider_id'];
-    String providerName = 'Assigned Professional';
+    String providerName = 'Searching for Provider...';
     String providerProfession = 'Service Partner';
-    String providerRating = '4.8';
+    String providerRating = 'N/A';
     String providerPhone = '';
 
     if (providerMap != null && providerMap is Map) {
       final pUser = providerMap['user_id'];
       if (pUser != null && pUser is Map) {
-        providerName = pUser['name'] ?? pUser['phone'] ?? 'Assigned Professional';
-        providerPhone = pUser['phone'] ?? '';
+        providerName = pUser['name'] ?? pUser['fullName'] ?? pUser['phone'] ?? 'Assigned Professional';
+        providerPhone = pUser['phone']?.toString() ?? '';
+      } else if (providerMap['name'] != null) {
+        providerName = providerMap['name'].toString();
+      } else {
+        providerName = 'Assigned Professional';
       }
-      providerProfession = providerMap['profession'] ?? 'Service Partner';
-      if (providerMap['rating'] != null) {
-        providerRating = providerMap['rating'].toString();
+
+      providerProfession = providerMap['profession'] ?? providerMap['service'] ?? 'Service Partner';
+      
+      final rawRating = providerMap['rating'] ?? providerMap['avgRating'] ?? providerMap['ratingAverage'];
+      if (rawRating != null && rawRating.toString().isNotEmpty) {
+        final double? parsedRating = double.tryParse(rawRating.toString());
+        if (parsedRating != null) {
+          providerRating = parsedRating.toStringAsFixed(1);
+        } else {
+          providerRating = rawRating.toString();
+        }
+      } else {
+        providerRating = '5.0';
       }
     }
 
@@ -367,18 +483,22 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
     final bool showStartOtpBox = (status == 'arrived' || status == 'waiting_start_otp');
     final bool showEndOtpBox = (status == 'waiting_end_otp');
 
+    final bookingCode = _bookingData?['booking_id']?.toString() ?? _bookingData?['_id']?.toString() ?? '';
+
     return ListView(
       children: [
         _buildTimelineItem(
           index: 0,
           currentStep: currentStep,
+          status: status,
           title: 'Booking Placed',
-          subtitle: 'Order confirmed successfully',
+          subtitle: bookingCode.isNotEmpty ? 'Order confirmed (Ref: $bookingCode)' : 'Order confirmed successfully',
           isLast: false,
         ),
         _buildTimelineItem(
           index: 1,
           currentStep: currentStep,
+          status: status,
           title: 'Professional Assigned',
           subtitle: currentStep >= 1 ? 'Provider has accepted your booking' : 'Searching for professional...',
           isLast: false,
@@ -386,6 +506,7 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
         _buildTimelineItem(
           index: 2,
           currentStep: currentStep,
+          status: status,
           title: 'Professional On The Way',
           subtitle: currentStep >= 2 ? 'Provider is traveling to your location' : 'Waiting for provider movement',
           isLast: false,
@@ -393,6 +514,7 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
         _buildTimelineItem(
           index: 3,
           currentStep: currentStep,
+          status: status,
           title: 'Professional Arrived & Start Service',
           subtitle: showStartOtpBox
               ? 'Share this Start OTP with the professional upon arrival'
@@ -408,6 +530,7 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
         _buildTimelineItem(
           index: 4,
           currentStep: currentStep,
+          status: status,
           title: 'Service In Progress',
           subtitle: currentStep >= 4 ? 'Professional is executing your service' : 'Pending service start',
           isLast: false,
@@ -415,6 +538,7 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
         _buildTimelineItem(
           index: 5,
           currentStep: currentStep,
+          status: status,
           title: 'Service Completion Verification',
           subtitle: showEndOtpBox
               ? 'Share this End OTP with the professional to finish service'
@@ -430,8 +554,9 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
         _buildTimelineItem(
           index: 6,
           currentStep: currentStep,
+          status: status,
           title: 'Service Completed',
-          subtitle: currentStep >= 6 ? 'Service fulfilled successfully' : 'Final step',
+          subtitle: status == 'completed' ? 'Service fulfilled successfully' : 'Final step',
           isLast: true,
         ),
       ],
@@ -488,13 +613,14 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
   Widget _buildTimelineItem({
     required int index,
     required int currentStep,
+    required String status,
     required String title,
     required String subtitle,
     required bool isLast,
     Widget? child,
   }) {
-    bool isCompleted = index < currentStep;
-    bool isActive = index == currentStep;
+    bool isCompleted = index < currentStep || (status == 'completed' && index <= currentStep);
+    bool isActive = index == currentStep && status != 'completed';
 
     Color dotColor = isCompleted || isActive ? const Color(0xFF1B1464) : Colors.grey.shade300;
     Color lineColor = isCompleted ? const Color(0xFF1B1464) : Colors.grey.shade200;

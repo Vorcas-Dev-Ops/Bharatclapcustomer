@@ -12,6 +12,7 @@ import 'search_screen.dart';
 import '../cart/cart_screen.dart';
 import '../bookings/bookings_screen.dart';
 import '../bookings/booking_details_screen.dart';
+import '../bookings/track_service_screen.dart';
 import '../notifications_screen.dart';
 import '../../services/notification_service.dart';
 import '../../services/notification_sync_service.dart';
@@ -66,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => BookingDetailsScreen(bookingId: bookingId.toString()),
+            builder: (context) => TrackServiceScreen(bookingId: bookingId.toString()),
           ),
         );
       } else if (mounted) {
@@ -313,8 +314,21 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHeader() {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'BharatClap',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: Color(0xFF16155D),
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
         Expanded(
           child: GestureDetector(
             onTap: () {
@@ -474,7 +488,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
-    );
+    ),
+  ],
+);
   }
 
   void _showAddressSelector() {
@@ -1227,88 +1243,158 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: _apiRecentBookings.take(5).map((booking) {
         String title = 'Service';
-        if (booking['subservice_id'] != null && booking['subservice_id']['subservice_name'] != null) {
-          title = booking['subservice_id']['subservice_name'];
+        String subserviceId = '';
+        String categoryId = '';
+        String price = '0';
+        String description = '';
+
+        if (booking['subservice_id'] != null && booking['subservice_id'] is Map) {
+          final sub = booking['subservice_id'];
+          title = sub['subservice_name'] ?? 'Service';
+          subserviceId = sub['_id']?.toString() ?? '';
+          categoryId = sub['category_id']?.toString() ?? '';
+          price = sub['price']?.toString() ?? sub['payable_amount']?.toString() ?? booking['payable_amount']?.toString() ?? '0';
+          description = sub['description'] ?? '';
+        } else if (booking['subservice_id'] != null) {
+          subserviceId = booking['subservice_id'].toString();
+          title = booking['variant_name'] ?? booking['service_name'] ?? 'Service';
+          price = booking['payable_amount']?.toString() ?? '0';
         } else if (booking['variant_name'] != null) {
           title = booking['variant_name'];
+          price = booking['payable_amount']?.toString() ?? '0';
         }
-        
+
         String dateStr = '';
         if (booking['scheduled_at'] != null) {
-          DateTime dt = DateTime.parse(booking['scheduled_at']).toLocal();
-          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-          String month = months[dt.month - 1];
-          String hr = (dt.hour % 12 == 0 ? 12 : dt.hour % 12).toString().padLeft(2, '0');
-          String min = dt.minute.toString().padLeft(2, '0');
-          String amPm = dt.hour >= 12 ? 'PM' : 'AM';
-          dateStr = '${dt.day.toString().padLeft(2, '0')} $month, $hr:$min $amPm';
+          try {
+            DateTime dt = DateTime.parse(booking['scheduled_at']).toLocal();
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            String month = months[dt.month - 1];
+            String hr = (dt.hour % 12 == 0 ? 12 : dt.hour % 12).toString().padLeft(2, '0');
+            String min = dt.minute.toString().padLeft(2, '0');
+            String amPm = dt.hour >= 12 ? 'PM' : 'AM';
+            dateStr = '${dt.day.toString().padLeft(2, '0')} $month, $hr:$min $amPm';
+          } catch (_) {}
         }
-        
+
         String byStr = 'Pending Assignment';
-        if (booking['provider_id'] != null && booking['provider_id']['user_id'] != null) {
+        if (booking['provider_id'] != null && booking['provider_id'] is Map && booking['provider_id']['user_id'] != null && booking['provider_id']['user_id'] is Map) {
           byStr = booking['provider_id']['user_id']['name'] ?? 'Provider';
         }
-        
+
         String rating = '0.0';
-        if (booking['provider_id'] != null && booking['provider_id']['rating'] != null) {
+        if (booking['provider_id'] != null && booking['provider_id'] is Map && booking['provider_id']['rating'] != null) {
           rating = booking['provider_id']['rating'].toString();
         }
-        
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 12.0),
-          child: _buildBookingCard(title, dateStr, byStr, rating, Icons.design_services),
+          child: _buildBookingCard(
+            booking: booking,
+            title: title,
+            date: dateStr,
+            by: byStr,
+            rating: rating,
+            icon: Icons.design_services,
+            subserviceId: subserviceId,
+            categoryId: categoryId,
+            price: price,
+            description: description,
+          ),
         );
       }).toList(),
     );
   }
 
-  Widget _buildBookingCard(String title, String date, String by, String rating, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(12),
+  Widget _buildBookingCard({
+    required dynamic booking,
+    required String title,
+    required String date,
+    required String by,
+    required String rating,
+    required IconData icon,
+    required String subserviceId,
+    required String categoryId,
+    required String price,
+    required String description,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        if (booking['_id'] != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BookingDetailsScreen(
+                bookingId: booking['_id'],
+                booking: booking,
+              ),
             ),
-            child: Icon(icon, color: const Color(0xFF1B1464)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text('$date • by $by', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    const Icon(Icons.star, color: Colors.amber, size: 14),
-                    const SizedBox(width: 4),
-                    Text(rating, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ],
+          );
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: const Color(0xFF1B1464)),
             ),
-          ),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1B1464),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              minimumSize: const Size(80, 36),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text('$date • by $by', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 14),
+                      const SizedBox(width: 4),
+                      Text(rating, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            child: const Text('Rebook', style: TextStyle(color: Colors.white, fontSize: 13)),
-          ),
-        ],
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ServiceDetailsScreen(
+                      subserviceId: subserviceId.isNotEmpty ? subserviceId : null,
+                      categoryId: categoryId.isNotEmpty ? categoryId : null,
+                      title: title,
+                      price: price,
+                      rating: rating,
+                      time: '45',
+                      imagePath: 'assets/images/service_placeholder.png',
+                      description: description.isNotEmpty ? description : null,
+                    ),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B1464),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                minimumSize: const Size(80, 36),
+              ),
+              child: const Text('Rebook', style: TextStyle(color: Colors.white, fontSize: 13)),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../services/api_service.dart';
 import '../services/notification_sync_service.dart';
 import 'bookings/booking_details_screen.dart';
+import 'bookings/track_service_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -79,6 +80,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (_) {}
   }
 
+  bool get _hasUnread => _notifications.any((item) => item['is_read'] != true);
+
+  Future<void> _markAllAsRead() async {
+    final unreadItems = _notifications.where((item) => item['is_read'] != true).toList();
+    if (unreadItems.isEmpty) return;
+
+    setState(() {
+      for (var item in _notifications) {
+        if (item is Map) {
+          item['is_read'] = true;
+        }
+      }
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      final futures = unreadItems.map((item) {
+        final id = item['_id']?.toString() ?? item['id']?.toString();
+        if (id != null) {
+          return http.put(
+            Uri.parse('${ApiService.baseUrl}/notifications/$id/read'),
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          );
+        }
+        return Future.value(null);
+      });
+      await Future.wait(futures);
+    } catch (_) {}
+
+    _fetchNotifications();
+    NotificationSyncService.fetchAndUpdate();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -91,6 +130,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(
+              Icons.done_all,
+              color: _hasUnread ? const Color(0xFF1E1B4B) : Colors.grey.shade400,
+            ),
+            tooltip: 'Mark all as read',
+            onPressed: _hasUnread ? _markAllAsRead : null,
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -141,7 +190,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => BookingDetailsScreen(bookingId: bId),
+                                    builder: (context) => TrackServiceScreen(bookingId: bId),
                                   ),
                                 );
                               }

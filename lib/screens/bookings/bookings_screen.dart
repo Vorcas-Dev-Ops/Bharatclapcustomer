@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'booking_details_screen.dart';
+import 'rate_service_screen.dart';
 import '../../services/api_service.dart';
 
 class BookingsScreen extends StatefulWidget {
@@ -48,20 +49,37 @@ class _BookingsScreenState extends State<BookingsScreen> {
     return _allBookings.where((booking) {
       final status = booking['status']?.toString().toLowerCase() ?? '';
       if (_selectedTab == 0) {
-        // Upcoming
-        return status == 'pending' || status == 'accepted' || status == 'provider_searching';
+        // Upcoming: Bookings waiting for provider, searching, accepted or scheduled
+        return [
+          'pending',
+          'provider_searching',
+          'accepted',
+          'assigned',
+          'confirmed',
+          'scheduled',
+          'ready_confirmed',
+        ].contains(status);
       } else if (_selectedTab == 1) {
-        // Ongoing
-        return status == 'in_progress' ||
-            status == 'started' ||
-            status == 'ongoing' ||
-            status == 'on_the_way' ||
-            status == 'arrived' ||
-            status == 'waiting_start_otp' ||
-            status == 'waiting_end_otp';
+        // Ongoing: Active bookings in transit, arrived or in-service
+        return [
+          'on_the_way',
+          'arrived',
+          'reached',
+          'waiting_start_otp',
+          'in_progress',
+          'started',
+          'ongoing',
+          'waiting_end_otp',
+        ].contains(status);
       } else {
-        // Completed
-        return status == 'completed' || status == 'cancelled';
+        // Completed: Finished or cancelled/expired bookings
+        return [
+          'completed',
+          'cancelled',
+          'rejected',
+          'unassigned_timeout',
+          'high_demand_timeout',
+        ].contains(status);
       }
     }).toList();
   }
@@ -80,13 +98,28 @@ class _BookingsScreenState extends State<BookingsScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 20, 20, 16),
-              child: Text(
-                'My Bookings',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'BharatClap',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF16155D),
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'My Bookings',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
               ),
             ),
             Padding(
@@ -254,7 +287,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -383,39 +416,82 @@ class _BookingsScreenState extends State<BookingsScreen> {
           ],
           
           const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: OutlinedButton(
-              onPressed: () {
-                // Navigate to details and potentially refresh upon returning
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => BookingDetailsScreen(
-                      bookingId: booking['_id'] ?? '',
-                      booking: booking,
+          Row(
+            children: [
+              if (lowerStatus == 'completed' && booking['is_reviewed'] != true) ...[
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RateServiceScreen(booking: booking),
+                          ),
+                        ).then((result) {
+                          if (result == true) {
+                            _fetchBookings();
+                          }
+                        });
+                      },
+                      icon: const Icon(Icons.star_rounded, size: 18, color: Colors.amber),
+                      label: const Text(
+                        'Rate Service',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1B1464),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
                     ),
                   ),
-                ).then((_) {
-                  _fetchBookings();
-                });
-              },
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.grey.shade300),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      // Navigate to details and potentially refresh upon returning
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => BookingDetailsScreen(
+                            bookingId: booking['_id'] ?? '',
+                            booking: booking,
+                          ),
+                        ),
+                      ).then((_) {
+                        _fetchBookings();
+                      });
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey.shade300),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'View Details',
+                      style: TextStyle(
+                        color: Color(0xFF1B1464),
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              child: const Text(
-                'View Details',
-                style: TextStyle(
-                  color: Color(0xFF1B1464),
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            ],
           ),
         ],
       ),

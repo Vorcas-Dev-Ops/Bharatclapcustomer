@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../address/add_address_screen.dart';
-import '../home/home_screen.dart';
 import '../../services/api_service.dart';
 
 class BasicDetailsScreen extends StatefulWidget {
@@ -16,6 +15,8 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
   final _nameController = TextEditingController();
   final _numberController = TextEditingController();
   final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
   bool _isLoading = false;
   String? _selectedGender;
   final List<String> _genders = ['Male', 'Female', 'Other', 'Prefer Not to say'];
@@ -59,6 +60,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
     _nameController.dispose();
     _numberController.dispose();
     _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -70,6 +72,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
         _nameController.text.trim(),
         _emailController.text.trim(),
         _selectedGender,
+        _passwordController.text.trim(),
       );
 
       if (mounted) {
@@ -81,8 +84,19 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
             (route) => false,
           );
         } else {
+          String errorMsg = response['message'] ?? 'Failed to register';
+          if (response['errors'] != null && response['errors'] is List && (response['errors'] as List).isNotEmpty) {
+            final errList = (response['errors'] as List).map((e) => e['message']?.toString()).whereType<String>().toList();
+            if (errList.isNotEmpty) {
+              errorMsg = errList.join('\n');
+            }
+          }
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(response['message'] ?? 'Failed to register')),
+            SnackBar(
+              content: Text(errorMsg),
+              backgroundColor: Colors.red.shade800,
+              behavior: SnackBarBehavior.floating,
+            ),
           );
         }
       }
@@ -94,7 +108,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
           child: Form(
             key: _formKey,
@@ -118,7 +132,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
                     color: Colors.grey,
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 30),
                 TextFormField(
                   controller: _nameController,
                   decoration: InputDecoration(
@@ -180,7 +194,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    labelText: 'Email Address (Optional)',
+                    labelText: 'Email Address *',
                     labelStyle: TextStyle(color: Colors.grey.shade600),
                     filled: true,
                     fillColor: Colors.white,
@@ -197,10 +211,68 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
                       borderSide: const BorderSide(color: Color(0xFF1B1464)),
                     ),
                   ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Email address is required';
+                    }
+                    if (!value.contains('@')) {
+                      return 'Please enter a valid email';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Password *',
+                    labelStyle: TextStyle(color: Colors.grey.shade600),
+                    helperText: 'Min 8 chars: uppercase, lowercase, number & special char',
+                    helperMaxLines: 2,
+                    filled: true,
+                    fillColor: Colors.white,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade200),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFF1B1464)),
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Password is required';
+                    }
+                    if (value.length < 8) {
+                      return 'Password must be at least 8 characters';
+                    }
+                    final passwordRegex = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_\-+=])[A-Za-z\d@$!%*?&#^()_\-+=]{8,}$');
+                    if (!passwordRegex.hasMatch(value)) {
+                      return 'Must include uppercase, lowercase, number & special char';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 20),
                 DropdownButtonFormField<String>(
-                  value: _selectedGender,
+                  initialValue: _selectedGender,
                   items: _genders.map((String gender) {
                     return DropdownMenuItem<String>(
                       value: gender,
@@ -231,7 +303,7 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
                     ),
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
                   height: 50,

@@ -47,13 +47,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  bool get _hasExistingPassword {
-    // The backend explicitly strips the password from the profile payload
-    // and requires `currentPassword` for any password update.
-    // Thus we always render the "Change Password" view and ask for Current Password.
-    return true;
-  }
-
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -70,7 +63,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       name: _nameController.text.trim(),
       phone: _phoneController.text.trim(),
       email: _emailController.text.trim(),
-      currentPassword: (_changePassword && _hasExistingPassword) ? _currentPasswordController.text : null,
+      currentPassword: _changePassword ? _currentPasswordController.text : null,
       newPassword: _changePassword ? _newPasswordController.text : null,
     );
 
@@ -80,7 +73,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         AppToast.show(context, 'Profile updated successfully!');
         Navigator.pop(context, true);
       } else {
-        AppToast.show(context, res['message'] ?? 'Failed to update profile', isError: true);
+        String errorMsg = res['message'] ?? 'Failed to update profile';
+        if (res['errors'] != null && res['errors'] is List && (res['errors'] as List).isNotEmpty) {
+          final errList = (res['errors'] as List).map((e) => e['message']?.toString()).whereType<String>().toList();
+          if (errList.isNotEmpty) {
+            errorMsg = errList.join('\n');
+          }
+        }
+        AppToast.show(context, errorMsg, isError: true);
       }
     }
   }
@@ -220,14 +220,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       initiallyExpanded: _changePassword,
                       onExpansionChanged: (val) => setState(() => _changePassword = val),
                       leading: const Icon(Icons.lock_outline, color: Color(0xFF1B1464)),
-                      title: Text(
-                        _hasExistingPassword ? 'Change Password' : 'Add Password',
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
+                      title: const Text(
+                        'Change Password',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
                       subtitle: Text(
                         _changePassword
-                            ? (_hasExistingPassword ? 'Updating login password' : 'Creating login password')
-                            : (_hasExistingPassword ? 'Tap to update email password' : 'Tap to set up email password'),
+                            ? 'Updating login password'
+                            : 'Tap to update login password',
                         style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                       ),
                       children: [
@@ -239,38 +239,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               const Divider(),
                               const SizedBox(height: 8),
 
-                              // Current Password (only if user already has a password)
-                              if (_hasExistingPassword) ...[
-                                const Text('Current Password', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
-                                const SizedBox(height: 6),
-                                TextFormField(
-                                  controller: _currentPasswordController,
-                                  obscureText: _obscureCurrentPassword,
-                                  decoration: InputDecoration(
-                                    prefixIcon: const Icon(Icons.lock_clock_outlined, color: Colors.grey, size: 20),
-                                    suffixIcon: IconButton(
-                                      icon: Icon(_obscureCurrentPassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
-                                      onPressed: () => setState(() => _obscureCurrentPassword = !_obscureCurrentPassword),
-                                    ),
-                                    hintText: 'Enter current password',
-                                    fillColor: const Color(0xFFFAFAFC),
-                                    filled: true,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
-                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
+                              // Current Password
+                              const Text('Current Password', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _currentPasswordController,
+                                obscureText: _obscureCurrentPassword,
+                                decoration: InputDecoration(
+                                  prefixIcon: const Icon(Icons.lock_clock_outlined, color: Colors.grey, size: 20),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(_obscureCurrentPassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                                    onPressed: () => setState(() => _obscureCurrentPassword = !_obscureCurrentPassword),
                                   ),
-                                  validator: (val) {
-                                    if (_changePassword && _hasExistingPassword && (val == null || val.isEmpty)) {
-                                      return 'Current password is required';
-                                    }
-                                    return null;
-                                  },
+                                  hintText: 'Enter current password',
+                                  fillColor: const Color(0xFFFAFAFC),
+                                  filled: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
                                 ),
-                                const SizedBox(height: 14),
-                              ],
+                                validator: (val) {
+                                  if (_changePassword && (val == null || val.isEmpty)) {
+                                    return 'Current password is required';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 14),
 
-                              // New Password / Set Password
-                              Text(_hasExistingPassword ? 'New Password' : 'Password', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
+                              // New Password
+                              const Text('New Password', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
                               const SizedBox(height: 6),
                               TextFormField(
                                 controller: _newPasswordController,
@@ -281,25 +279,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     icon: Icon(_obscureNewPassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
                                     onPressed: () => setState(() => _obscureNewPassword = !_obscureNewPassword),
                                   ),
-                                  hintText: _hasExistingPassword ? 'Enter new password' : 'Create password (min 6 chars)',
+                                  hintText: 'Enter new password',
                                   fillColor: const Color(0xFFFAFAFC),
                                   filled: true,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
                                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
                                 ),
-                                validator: (val) {
-                                  if (_changePassword) {
-                                    if (val == null || val.isEmpty) return 'Password is required';
-                                    if (val.length < 6) return 'Minimum 6 characters required';
-                                  }
-                                  return null;
-                                },
+                                 validator: (val) {
+                                   if (_changePassword) {
+                                     if (val == null || val.isEmpty) return 'Password is required';
+                                     if (val.length < 8) return 'Minimum 8 characters required';
+                                     final passwordRegex = RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_\-+=])[A-Za-z\d@$!%*?&#^()_\-+=]{8,}$');
+                                     if (!passwordRegex.hasMatch(val)) {
+                                       return 'Must include uppercase, lowercase, number & special char';
+                                     }
+                                   }
+                                   return null;
+                                 },
                               ),
                               const SizedBox(height: 14),
 
-                              // Confirm Password
-                              Text(_hasExistingPassword ? 'Confirm New Password' : 'Confirm Password', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
+                              // Confirm New Password
+                              const Text('Confirm New Password', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87)),
                               const SizedBox(height: 6),
                               TextFormField(
                                 controller: _confirmPasswordController,
@@ -310,7 +312,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                     icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
                                     onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                                   ),
-                                  hintText: 'Re-enter password',
+                                  hintText: 'Re-enter new password',
                                   fillColor: const Color(0xFFFAFAFC),
                                   filled: true,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

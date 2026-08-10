@@ -25,9 +25,55 @@ class ApiService {
     debugPrint('[ApiService] Connection error: $e');
   }
 
+  static bool _isRefreshing = false;
+
+  static Future<bool> _refreshAccessToken() async {
+    if (_isRefreshing) return false;
+    _isRefreshing = true;
+    try {
+      final refreshToken = await getRefreshToken();
+      final currentToken = await getToken();
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/users/refresh'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (refreshToken != null && refreshToken.isNotEmpty) 'Cookie': 'jwt=$refreshToken',
+          if (currentToken != null && currentToken.isNotEmpty) 'Authorization': 'Bearer $currentToken',
+        },
+        body: jsonEncode({
+          'refreshToken': refreshToken,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final newToken = data['token'] ?? data['accessToken'];
+        if (newToken != null && newToken is String && newToken.isNotEmpty) {
+          await saveToken(newToken);
+          _isRefreshing = false;
+          return true;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ApiService] Token refresh failed: $e');
+    }
+    _isRefreshing = false;
+    return false;
+  }
+
   static Future<http.Response> _get(Uri url, {Map<String, String>? headers}) async {
     try {
       final response = await http.get(url, headers: headers);
+      if (response.statusCode == 401 && !url.path.endsWith('/users/refresh') && !url.path.endsWith('/users/verify-otp')) {
+        final refreshed = await _refreshAccessToken();
+        if (refreshed) {
+          final newToken = await getToken();
+          final updatedHeaders = Map<String, String>.from(headers ?? {});
+          if (newToken != null) updatedHeaders['Authorization'] = 'Bearer $newToken';
+          return await http.get(url, headers: updatedHeaders);
+        }
+      }
       _checkResponse(response);
       return response;
     } catch (e) {
@@ -39,6 +85,15 @@ class ApiService {
   static Future<http.Response> _post(Uri url, {Map<String, String>? headers, Object? body}) async {
     try {
       final response = await http.post(url, headers: headers, body: body);
+      if (response.statusCode == 401 && !url.path.endsWith('/users/refresh') && !url.path.endsWith('/users/verify-otp')) {
+        final refreshed = await _refreshAccessToken();
+        if (refreshed) {
+          final newToken = await getToken();
+          final updatedHeaders = Map<String, String>.from(headers ?? {});
+          if (newToken != null) updatedHeaders['Authorization'] = 'Bearer $newToken';
+          return await http.post(url, headers: updatedHeaders, body: body);
+        }
+      }
       _checkResponse(response);
       return response;
     } catch (e) {
@@ -50,6 +105,15 @@ class ApiService {
   static Future<http.Response> _put(Uri url, {Map<String, String>? headers, Object? body}) async {
     try {
       final response = await http.put(url, headers: headers, body: body);
+      if (response.statusCode == 401 && !url.path.endsWith('/users/refresh') && !url.path.endsWith('/users/verify-otp')) {
+        final refreshed = await _refreshAccessToken();
+        if (refreshed) {
+          final newToken = await getToken();
+          final updatedHeaders = Map<String, String>.from(headers ?? {});
+          if (newToken != null) updatedHeaders['Authorization'] = 'Bearer $newToken';
+          return await http.put(url, headers: updatedHeaders, body: body);
+        }
+      }
       _checkResponse(response);
       return response;
     } catch (e) {
@@ -61,6 +125,15 @@ class ApiService {
   static Future<http.Response> _delete(Uri url, {Map<String, String>? headers, Object? body}) async {
     try {
       final response = await http.delete(url, headers: headers, body: body);
+      if (response.statusCode == 401 && !url.path.endsWith('/users/refresh') && !url.path.endsWith('/users/verify-otp')) {
+        final refreshed = await _refreshAccessToken();
+        if (refreshed) {
+          final newToken = await getToken();
+          final updatedHeaders = Map<String, String>.from(headers ?? {});
+          if (newToken != null) updatedHeaders['Authorization'] = 'Bearer $newToken';
+          return await http.delete(url, headers: updatedHeaders, body: body);
+        }
+      }
       _checkResponse(response);
       return response;
     } catch (e) {
@@ -72,6 +145,15 @@ class ApiService {
   static Future<http.Response> _patch(Uri url, {Map<String, String>? headers, Object? body}) async {
     try {
       final response = await http.patch(url, headers: headers, body: body);
+      if (response.statusCode == 401 && !url.path.endsWith('/users/refresh') && !url.path.endsWith('/users/verify-otp')) {
+        final refreshed = await _refreshAccessToken();
+        if (refreshed) {
+          final newToken = await getToken();
+          final updatedHeaders = Map<String, String>.from(headers ?? {});
+          if (newToken != null) updatedHeaders['Authorization'] = 'Bearer $newToken';
+          return await http.patch(url, headers: updatedHeaders, body: body);
+        }
+      }
       _checkResponse(response);
       return response;
     } catch (e) {
@@ -81,11 +163,21 @@ class ApiService {
   }
 
   static const String _tokenKey = 'auth_token';
+  static const String _refreshTokenKey = 'refresh_token';
 
   // Helper to save token
-  static Future<void> saveToken(String token) async {
+  static Future<void> saveToken(String token, {String? refreshToken}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      await prefs.setString(_refreshTokenKey, refreshToken);
+    }
+  }
+
+  // Helper to get refresh token
+  static Future<String?> getRefreshToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_refreshTokenKey);
   }
 
   // Helper to get token
@@ -98,6 +190,7 @@ class ApiService {
   static Future<void> clearToken() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
+    await prefs.remove(_refreshTokenKey);
   }
 
   static Future<bool> isLoggedIn() async {
@@ -166,8 +259,9 @@ class ApiService {
       if (data['success'] == true) {
         final user = data['user'];
         final token = user?['token'] ?? data['token'];
+        final refreshToken = user?['refreshToken'] ?? data['refreshToken'];
         if (token != null && token != 'pending_auth_token') {
-          await saveToken(token);
+          await saveToken(token, refreshToken: refreshToken);
         }
       }
       return data;
@@ -177,7 +271,7 @@ class ApiService {
   }
 
   // Register User
-  static Future<Map<String, dynamic>> registerUser(String phone, String name, [String? email, String? gender]) async {
+  static Future<Map<String, dynamic>> registerUser(String phone, String name, [String? email, String? gender, String? password]) async {
     try {
       final Map<String, dynamic> body = {'phone': cleanPhone(phone), 'name': name};
       if (email != null && email.isNotEmpty) {
@@ -185,6 +279,9 @@ class ApiService {
       }
       if (gender != null && gender.isNotEmpty) {
         body['gender'] = gender;
+      }
+      if (password != null && password.isNotEmpty) {
+        body['password'] = password;
       }
 
       final response = await _post(
@@ -901,6 +998,60 @@ class ApiService {
       return data;
     } catch (e) {
       return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Create Review for Service and Provider
+  static Future<Map<String, dynamic>> createReview({
+    required String bookingId,
+    required String providerId,
+    required String serviceId,
+    required String subserviceId,
+    required int rating,
+    required String comment,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
+      final response = await _post(
+        Uri.parse('$baseUrl/reviews'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'booking_id': bookingId,
+          'provider_id': providerId,
+          'service_id': serviceId,
+          'subservice_id': subserviceId,
+          'rating': rating,
+          'comment': comment,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        data['success'] = true;
+        return data;
+      }
+      return {'success': false, 'message': data['message'] ?? 'Failed to submit review'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get Reviews for a Provider
+  static Future<List<dynamic>> getProviderReviews(String providerId) async {
+    try {
+      final response = await _get(Uri.parse('$baseUrl/reviews/provider/$providerId'));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) return data;
+      }
+      return [];
+    } catch (e) {
+      return [];
     }
   }
 }
