@@ -1,6 +1,6 @@
 {
-    "name": "customer_app",
-    "short_name": "customer_app",
+    "name": "BharatClap",
+    "short_name": "BharatClap",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -186,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'Leave BharathClap?',
+                    'Leave BharatClap?',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'screens/splash/splash_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'services/api_service.dart';
@@ -29,11 +30,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       navigatorKey: ServerErrorHandler.navigatorKey,
       debugShowCheckedModeBanner: false,
-      title: 'Flutter Demo',
+      title: 'BharatClap',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: isLoggedIn ? const HomeScreen() : const OnboardingScreen(),
+      home: SplashScreen(isLoggedIn: isLoggedIn),
     );
   }
 }
