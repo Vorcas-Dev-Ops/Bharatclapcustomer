@@ -47,39 +47,45 @@ class _BookingsScreenState extends State<BookingsScreen> {
 
   List<dynamic> _getFilteredBookings() {
     return _allBookings.where((booking) {
-      final status = booking['status']?.toString().toLowerCase() ?? '';
+      final status = booking['status']?.toString().toLowerCase().trim() ?? '';
+      
+      final completedStatuses = [
+        'completed',
+        'finished',
+        'cancelled',
+        'canceled',
+        'rejected',
+        'unassigned_timeout',
+        'high_demand_timeout',
+        'failed',
+      ];
+
+      final ongoingStatuses = [
+        'accepted',
+        'assigned',
+        'confirmed',
+        'scheduled',
+        'on_the_way',
+        'arrived',
+        'reached',
+        'waiting_start_otp',
+        'in_progress',
+        'started',
+        'ongoing',
+        'waiting_end_otp',
+        'pending',
+        'provider_searching',
+      ];
+
       if (_selectedTab == 0) {
-        // Upcoming: Bookings waiting for provider, searching, accepted or scheduled
-        return [
-          'pending',
-          'provider_searching',
-          'accepted',
-          'assigned',
-          'confirmed',
-          'scheduled',
-          'ready_confirmed',
-        ].contains(status);
+        // Upcoming: Any active non-completed booking
+        return !completedStatuses.contains(status);
       } else if (_selectedTab == 1) {
-        // Ongoing: Active bookings in transit, arrived or in-service
-        return [
-          'on_the_way',
-          'arrived',
-          'reached',
-          'waiting_start_otp',
-          'in_progress',
-          'started',
-          'ongoing',
-          'waiting_end_otp',
-        ].contains(status);
+        // Ongoing: Active bookings assigned, in transit, or in service
+        return ongoingStatuses.contains(status) && !completedStatuses.contains(status);
       } else {
         // Completed: Finished or cancelled/expired bookings
-        return [
-          'completed',
-          'cancelled',
-          'rejected',
-          'unassigned_timeout',
-          'high_demand_timeout',
-        ].contains(status);
+        return completedStatuses.contains(status);
       }
     }).toList();
   }

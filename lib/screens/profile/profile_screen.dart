@@ -3,6 +3,7 @@ import '../auth/login_screen.dart';
 import '../../services/api_service.dart';
 import '../address/saved_addresses_screen.dart';
 import 'edit_profile_screen.dart';
+import 'help_support_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -340,9 +341,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFF3F4F8), indent: 20, endIndent: 20),
-          _buildListTile(Icons.payments_outlined, 'Payment Methods'),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFF3F4F8), indent: 20, endIndent: 20),
-          _buildListTile(Icons.help_outline, 'Help & Support'),
+          _buildListTile(
+            Icons.help_outline, 
+            'Help & Support',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HelpSupportScreen()),
+              );
+            },
+          ),
         ],
       ),
     );

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../chat/chat_screen.dart';
 
 class TrackServiceScreen extends StatefulWidget {
   final String? bookingId;
@@ -455,6 +456,31 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
               Row(
                 children: [
                   GestureDetector(
+                    onTap: () {
+                      final bId = (_bookingData?['booking_id'] ?? _bookingData?['display_id'] ?? widget.bookingId ?? _bookingData?['_id'])?.toString();
+                      if (bId != null && bId.isNotEmpty) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CustomerChatScreen(
+                              bookingId: bId,
+                              providerName: name,
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFEFF1FE),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF1B1464), size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  GestureDetector(
                     onTap: () => _makePhoneCall(phone),
                     child: Container(
                       padding: const EdgeInsets.all(8),
@@ -546,8 +572,10 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
           isLast: false,
           child: showEndOtpBox
               ? _buildOtpBox(
-                  otp: endOtp,
+                  otp: endOtp ?? _bookingData?['endOtp'] ?? _bookingData?['completionOtp'],
                   helperText: 'Provide this End OTP ONLY after service is completed satisfactorily.',
+                  isEndOtp: true,
+                  bookingId: (widget.bookingId ?? _bookingData?['_id'] ?? _bookingData?['id'])?.toString(),
                 )
               : null,
         ),
@@ -563,7 +591,12 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
     );
   }
 
-  Widget _buildOtpBox({required String? otp, required String helperText}) {
+  Widget _buildOtpBox({
+    required String? otp,
+    required String helperText,
+    bool isEndOtp = false,
+    String? bookingId,
+  }) {
     final String formattedOtp = (otp != null && otp.length == 6)
         ? '${otp[0]}  ${otp[1]}  ${otp[2]}  ${otp[3]}  ${otp[4]}  ${otp[5]}'
         : (otp ?? 'Waiting for OTP...');
@@ -605,10 +638,35 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (isEndOtp && bookingId != null) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF1B1464),
+                side: const BorderSide(color: Color(0xFF1B1464)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+              icon: const Icon(Icons.send_to_mobile, size: 16),
+              label: const Text('Resend Completion OTP to SMS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              onPressed: () async {
+                final res = await ApiService.resendCompletionOtp(bookingId);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(res['message'] ?? 'Resent completion OTP!'),
+                      backgroundColor: res['success'] == true ? Colors.green : Colors.red,
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
         ],
       ),
     );
   }
+
 
   Widget _buildTimelineItem({
     required int index,

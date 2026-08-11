@@ -14,6 +14,7 @@ import '../bookings/bookings_screen.dart';
 import '../bookings/booking_details_screen.dart';
 import '../bookings/track_service_screen.dart';
 import '../notifications_screen.dart';
+import '../chat/chat_screen.dart';
 import '../../services/notification_service.dart';
 import '../../services/notification_sync_service.dart';
 import '../../providers/cart_state.dart';
@@ -62,7 +63,17 @@ class _HomeScreenState extends State<HomeScreen> {
       if (payload.startsWith('{')) {
         data = jsonDecode(payload);
       }
+      final type = data['type']?.toString();
       final bookingId = data['booking_id'] ?? data['bookingId'] ?? data['booking'];
+      if (type == 'chat' && bookingId != null && bookingId.toString().isNotEmpty && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => CustomerChatScreen(bookingId: bookingId.toString()),
+          ),
+        );
+        return;
+      }
       if (bookingId != null && bookingId.toString().isNotEmpty && mounted) {
         Navigator.push(
           context,

@@ -111,7 +111,10 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
     } catch (_) {}
 
     if (razorpayOrderId.isEmpty) {
-      razorpayOrderId = 'order_${DateTime.now().millisecondsSinceEpoch}';
+      if (mounted) {
+        _showFailureDialog('Failed to create payment order on server. Please try again.');
+      }
+      return;
     }
 
     // 2. Launch Native Razorpay Gateway SDK Webview
@@ -119,12 +122,7 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
 
     if (paymentResult == null || paymentResult['success'] != true) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Payment cancelled or failed by user.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        _showFailureDialog(paymentResult?['message'] ?? 'Payment cancelled or declined by Razorpay.');
       }
       return;
     }
@@ -206,6 +204,40 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
     }
 
     return _razorpayCompleter!.future;
+  }
+
+  void _showFailureDialog(String reason) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.error_outline, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text(
+              'Payment Failed',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          reason.isNotEmpty ? reason : 'The payment transaction could not be completed. Please try again.',
+          style: const TextStyle(fontSize: 14, color: Colors.black87),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1B1464),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSuccessDialog(String bookingId) {

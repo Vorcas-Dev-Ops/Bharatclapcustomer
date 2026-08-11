@@ -658,8 +658,14 @@ class ApiService {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        if (data != null && data['data'] is List) {
-          return data['data'];
+        if (data != null) {
+          if (data['data'] is List) {
+            return data['data'];
+          } else if (data is List) {
+            return data;
+          } else if (data['bookings'] is List) {
+            return data['bookings'];
+          }
         }
       }
       return [];
@@ -872,6 +878,66 @@ class ApiService {
     }
   }
 
+  // Request Account Deletion (DPDPA Right to Erasure - 30 days cooling period)
+  static Future<Map<String, dynamic>> requestAccountDeletion() async {
+    try {
+      final token = await getToken();
+      final response = await _post(
+        Uri.parse('$baseUrl/users/me/delete-request'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'message': jsonDecode(response.body)['message'] ?? 'Failed to request account deletion'};
+    } catch (e) {
+      return {'success': false, 'message': 'Failed to request account deletion: $e'};
+    }
+  }
+
+  // Cancel Account Deletion Request
+  static Future<Map<String, dynamic>> cancelAccountDeletion() async {
+    try {
+      final token = await getToken();
+      final response = await _delete(
+        Uri.parse('$baseUrl/users/me/delete-request'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'message': jsonDecode(response.body)['message'] ?? 'Failed to cancel account deletion'};
+    } catch (e) {
+      return {'success': false, 'message': 'Failed to cancel account deletion: $e'};
+    }
+  }
+
+  // Export User Data (DPDPA Data Portability)
+  static Future<Map<String, dynamic>> exportUserData() async {
+    try {
+      final token = await getToken();
+      final response = await _get(
+        Uri.parse('$baseUrl/users/me/export'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return {'success': false, 'message': 'Failed to export user data'};
+    } catch (e) {
+      return {'success': false, 'message': 'Failed to export user data: $e'};
+    }
+  }
+
   // Update Slot for Cart Item
   static Future<Map<String, dynamic>?> updateSlot(String subserviceId, String selectedDate, String selectedTimeSlot) async {
     try {
@@ -1054,4 +1120,150 @@ class ApiService {
       return [];
     }
   }
+
+  // Resend Completion OTP for a booking (type: 'end')
+  static Future<Map<String, dynamic>> resendCompletionOtp(String bookingId) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
+      final response = await _post(
+        Uri.parse('$baseUrl/bookings/$bookingId/resend-otp'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'type': 'end'}),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'message': data['message'] ?? 'Completion OTP sent to your phone!'};
+      }
+      return {'success': false, 'message': data['message'] ?? data['error'] ?? 'Failed to resend completion OTP'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get Invoice URL for completed booking
+  static String getInvoiceUrl(String bookingId) {
+    return '$baseUrl/payments/invoices/$bookingId';
+  }
+
+  // Fetch Chat Conversations / Messages
+  static Future<Map<String, dynamic>> getChatMessages(String bookingId) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
+      final rawId = bookingId.replaceAll('CHAT-BKG-', '');
+      final convId = 'CHAT-BKG-$rawId';
+
+      var response = await _get(
+        Uri.parse('$baseUrl/chat/conversations/$convId/messages'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final payload = data['data'] ?? data;
+        return {'success': true, 'data': payload};
+      }
+
+      // Fallback: Query conversation by booking_id
+      final convResponse = await _get(
+        Uri.parse('$baseUrl/chat/conversations?booking_id=$rawId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (convResponse.statusCode == 200) {
+        final convData = jsonDecode(convResponse.body);
+        final convPayload = convData['data'] ?? convData;
+        if (convPayload is List && convPayload.isNotEmpty) {
+          final firstConv = convPayload.first;
+          final actualConvId = firstConv['conversation_id'] ?? firstConv['_id'];
+          if (actualConvId != null) {
+            final msgResponse = await _get(
+              Uri.parse('$baseUrl/chat/conversations/$actualConvId/messages'),
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer $token',
+              },
+            );
+            if (msgResponse.statusCode == 200) {
+              final msgData = jsonDecode(msgResponse.body);
+              return {'success': true, 'data': msgData['data'] ?? msgData};
+            }
+          }
+        }
+      }
+
+      return {'success': false, 'message': 'Failed to load chat'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Send Chat Message
+  static Future<Map<String, dynamic>> sendChatMessage({
+    required String bookingId,
+    required String text,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
+      final convId = bookingId.startsWith('CHAT-BKG-') ? bookingId : 'CHAT-BKG-$bookingId';
+      final response = await _post(
+        Uri.parse('$baseUrl/chat/conversations/$convId/messages'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'bookingId': bookingId,
+          'text': text,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'data': data['data'] ?? data};
+      }
+      return {'success': false, 'message': data['message'] ?? 'Failed to send message'};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // Get Chat Conversations
+  static Future<List<dynamic>> getChatConversations() async {
+    try {
+      final token = await getToken();
+      if (token == null) return [];
+      final response = await _get(
+        Uri.parse('$baseUrl/chat/conversations'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final payload = data['data'] ?? data;
+        if (payload is List) return payload;
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
 }
+

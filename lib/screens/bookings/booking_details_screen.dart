@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'track_service_screen.dart';
 import 'rate_service_screen.dart';
+import '../chat/chat_screen.dart';
 import '../../services/api_service.dart';
 
 class BookingDetailsScreen extends StatefulWidget {
@@ -514,13 +515,27 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  shape: BoxShape.circle,
+              GestureDetector(
+                onTap: () {
+                  final bId = _bookingData?['booking_id']?.toString() ?? _bookingData?['_id']?.toString() ?? widget.bookingId;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CustomerChatScreen(
+                        bookingId: bId,
+                        providerName: providerName,
+                      ),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.message_outlined, color: Color(0xFF1B1464), size: 20),
                 ),
-                child: const Icon(Icons.message_outlined, color: Color(0xFF1B1464), size: 20),
               ),
               const SizedBox(width: 12),
               Container(
