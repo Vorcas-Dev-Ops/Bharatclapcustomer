@@ -235,6 +235,36 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
 
+            // Error banner if API Key missing or map loading issue
+            if (_apiKey.isEmpty)
+              Positioned(
+                top: 90,
+                left: 16,
+                right: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade800,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+                    ],
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.white, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Unable to load map details. Google Maps Error.',
+                          style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
             // Fixed Center Marker/Pin (Uber-style)
             Center(
               child: Container(

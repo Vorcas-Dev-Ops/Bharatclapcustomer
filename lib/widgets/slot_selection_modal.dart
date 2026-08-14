@@ -5,12 +5,12 @@ import '../providers/cart_state.dart';
 import 'app_toast.dart';
 
 class SlotSelectionModal extends StatefulWidget {
-  final String subserviceId;
+  final List<String> subserviceIds;
   final String serviceTitle;
 
   const SlotSelectionModal({
     super.key,
-    required this.subserviceId,
+    required this.subserviceIds,
     required this.serviceTitle,
   });
 
@@ -23,8 +23,23 @@ class SlotSelectionModal extends StatefulWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) => SlotSelectionModal(
-        subserviceId: subserviceId,
+        subserviceIds: [subserviceId],
         serviceTitle: serviceTitle,
+      ),
+    );
+  }
+
+  static Future<void> showForGroup(BuildContext context, List<String> subserviceIds, String groupTitle) {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => SlotSelectionModal(
+        subserviceIds: subserviceIds,
+        serviceTitle: groupTitle,
       ),
     );
   }
@@ -103,7 +118,9 @@ class _SlotSelectionModalState extends State<SlotSelectionModal> {
 
       final selectedDate = combinedDateTime.toIso8601String();
 
-      final res = await ApiService.updateSlot(widget.subserviceId, selectedDate, selectedTime);
+      for (final id in widget.subserviceIds) {
+        await ApiService.updateSlot(id, selectedDate, selectedTime);
+      }
       await CartState.fetchCart();
 
       if (mounted) {

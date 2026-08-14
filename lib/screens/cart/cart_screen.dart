@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
 import '../../providers/cart_state.dart';
-import 'slot_selection_screen.dart';
 import 'payment_selection_screen.dart';
 import '../address/add_address_screen.dart';
 import '../home/categories_screen.dart';
@@ -23,6 +22,7 @@ class _CartScreenState extends State<CartScreen> {
   List<dynamic> _popularServices = [];
   bool _isLoading = false;
   bool _isPopularLoading = true;
+  final Set<String> _customIndividualSlotsCategories = {};
 
   @override
   void initState() {
@@ -131,7 +131,7 @@ class _CartScreenState extends State<CartScreen> {
         CartState.cartData.value = data;
         CartState.updateCount(data);
         final title = service['name'] ?? service['subservice_name'] ?? service['service_name'] ?? service['title'] ?? 'Service';
-        SlotSelectionModal.show(context, subserviceId.toString(), title);
+        AppToast.show(context, 'Added $title to cart');
       } else {
         AppToast.show(context, data?['message'] ?? 'Failed to add item', isError: true);
       }
@@ -278,29 +278,46 @@ class _CartScreenState extends State<CartScreen> {
 
   void _navigateToSlotSelection() {
     if (_currentAddress == null || _currentAddress!['_id'] == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an address first')),
-      );
+      AppToast.show(context, 'Please select or add an address first', isError: true);
       return;
     }
 
     final cartData = CartState.cartData.value;
+    final items = (cartData?['items'] as List<dynamic>?) ?? [];
+
+    if (items.isEmpty) {
+      AppToast.show(context, 'Your cart is empty', isError: true);
+      return;
+    }
+
+    // Check if ALL services in the cart have a selected date and time slot
+    final List<String> unselectedServices = [];
+    for (var item in items) {
+      final subservice = item['subservice_id'];
+      final title = subservice is Map 
+          ? (subservice['subservice_name'] ?? subservice['name'] ?? subservice['service_name'] ?? 'Service')
+          : 'Service';
+      final selectedDate = item['selected_date']?.toString();
+      final selectedTimeSlot = item['selected_time_slot']?.toString();
+
+      if (selectedDate == null || selectedDate.trim().isEmpty || selectedTimeSlot == null || selectedTimeSlot.trim().isEmpty) {
+        unselectedServices.add(title);
+      }
+    }
+
+    if (unselectedServices.isNotEmpty) {
+      AppToast.show(
+        context,
+        'Please select a time slot for all services before proceeding to checkout',
+        isError: true,
+      );
+      return;
+    }
+
     final totalAmount = (cartData?['total_amount'] as num?)?.toDouble() ?? 0.0;
-
-    String selectedDate = '';
-    String selectedTime = '';
-    if (cartData != null && cartData['items'] != null && (cartData['items'] as List).isNotEmpty) {
-      final firstItem = cartData['items'][0];
-      selectedDate = firstItem['scheduled_date']?.toString() ?? firstItem['date']?.toString() ?? '';
-      selectedTime = firstItem['scheduled_time']?.toString() ?? firstItem['time_slot']?.toString() ?? '';
-    }
-
-    if (selectedDate.isEmpty) {
-      selectedDate = DateTime.now().toString().split(' ')[0];
-    }
-    if (selectedTime.isEmpty) {
-      selectedTime = '02:00 PM';
-    }
+    final firstItem = items[0];
+    final selectedDate = firstItem['selected_date']?.toString() ?? DateTime.now().toString().split(' ')[0];
+    final selectedTime = firstItem['selected_time_slot']?.toString() ?? '02:00 PM';
     
     Navigator.push(
       context,
@@ -343,12 +360,7 @@ class _CartScreenState extends State<CartScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 20.0),
                           child: _buildAddressCard(),
                         ),
-                        const SizedBox(height: 16),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                          child: _buildAccountDetails(),
-                        ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
                         if (isEmpty)
                           const Padding(
                             padding: EdgeInsets.all(20.0),
@@ -508,38 +520,6 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildAccountDetails() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 20,
-          height: 20,
-          decoration: BoxDecoration(
-            color: const Color(0xFF1B1464),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: const Icon(Icons.check, color: Colors.white, size: 14),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Use my account details',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Account User',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   List<dynamic> _deduplicateCartItems(List<dynamic> items) {
     final Map<String, dynamic> combined = {};
     for (var item in items) {
@@ -568,10 +548,197 @@ class _CartScreenState extends State<CartScreen> {
     return combined.values.toList();
   }
 
+  String _getCategoryName(dynamic item) {
+    final subservice = item['subservice_id'];
+    
+    // 1. Check explicit fields in item or subservice object
+    if (item is Map) {
+      if (item['category_name'] != null && item['category_name'].toString().trim().isNotEmpty) {
+        return item['category_name'].toString().trim();
+      }
+      if (item['category'] != null && item['category'].toString().trim().isNotEmpty) {
+        return item['category'].toString().trim();
+      }
+    }
+    
+    if (subservice is Map) {
+      if (subservice['category_name'] != null && subservice['category_name'].toString().trim().isNotEmpty) {
+        return subservice['category_name'].toString().trim();
+      }
+      final catObj = subservice['category_id'];
+      if (catObj is Map) {
+        if (catObj['category_name'] != null && catObj['category_name'].toString().trim().isNotEmpty) {
+          return catObj['category_name'].toString().trim();
+        }
+        if (catObj['name'] != null && catObj['name'].toString().trim().isNotEmpty) {
+          return catObj['name'].toString().trim();
+        }
+      }
+      if (subservice['service_name'] != null && subservice['service_name'].toString().trim().isNotEmpty) {
+        return subservice['service_name'].toString().trim();
+      }
+      if (subservice['category'] != null && subservice['category'].toString().trim().isNotEmpty) {
+        return subservice['category'].toString().trim();
+      }
+    }
+
+    // 2. Fallback: infer category from item title / subservice name
+    String title = '';
+    if (subservice is Map) {
+      title = (subservice['subservice_name'] ?? subservice['name'] ?? subservice['title'] ?? '').toString();
+    }
+    if (title.isEmpty && item is Map) {
+      title = (item['title'] ?? item['name'] ?? item['package_name'] ?? '').toString();
+    }
+
+    final lower = title.toLowerCase();
+    if (lower.contains('water') || lower.contains('ro ') || lower.contains('purifier') || lower.contains('filter')) {
+      return 'Water Purifier & Testing';
+    }
+    if (lower.contains('delivery') || lower.contains('logistics') || lower.contains('bulk') || lower.contains('office supply') || lower.contains('pack')) {
+      return 'Bulk Delivery & Logistics';
+    }
+    if (lower.contains('ac ') || lower.contains('air conditioner')) {
+      return 'AC Repair & Service';
+    }
+    if (lower.contains('clean') || lower.contains('pest') || lower.contains('sofa') || lower.contains('mattress') || lower.contains('disinfection')) {
+      return 'Cleaning & Pest Control';
+    }
+    if (lower.contains('paint') || lower.contains('wall') || lower.contains('renovation')) {
+      return 'Painting & Waterproofing';
+    }
+    if (lower.contains('plumb') || lower.contains('pipe') || lower.contains('leak') || lower.contains('drain') || lower.contains('faucet') || lower.contains('tank')) {
+      return 'Plumbing Services';
+    }
+    if (lower.contains('electric') || lower.contains('fan') || lower.contains('switch') || lower.contains('light') || lower.contains('wiring') || lower.contains('invertor')) {
+      return 'Electrician Services';
+    }
+    if (lower.contains('carpent') || lower.contains('door') || lower.contains('cupboard') || lower.contains('furniture') || lower.contains('wood')) {
+      return 'Carpentry Services';
+    }
+    if (lower.contains('cctv') || lower.contains('camera') || lower.contains('lock') || lower.contains('security')) {
+      return 'CCTV & Smart Security';
+    }
+    if (lower.contains('vehicle') || lower.contains('car') || lower.contains('bike') || lower.contains('wash')) {
+      return 'Vehicle Services';
+    }
+    if (lower.contains('loan') || lower.contains('finance')) {
+      return 'Financial & Loan Services';
+    }
+    if (lower.contains('beauty') || lower.contains('facial') || lower.contains('hair') || lower.contains('massage') || lower.contains('pedicure') || lower.contains('wax')) {
+      return 'Beauty & Wellness';
+    }
+
+    if (title.isNotEmpty) {
+      return title;
+    }
+
+    return 'Services';
+  }
+
   Widget _buildCartItemsList(List<dynamic> rawItems) {
     final items = _deduplicateCartItems(rawItems);
+
+    final Map<String, List<dynamic>> groupedItems = {};
+    for (var item in items) {
+      final catName = _getCategoryName(item);
+      groupedItems.putIfAbsent(catName, () => []).add(item);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...groupedItems.entries.map((entry) {
+          final categoryName = entry.key;
+          final categoryItems = entry.value;
+          return _buildCategoryGroupCard(categoryName, categoryItems);
+        }),
+        const SizedBox(height: 8),
+        Center(
+          child: InkWell(
+            onTap: _onAddMoreItemsPressed,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B1464).withOpacity(0.06),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_circle_outline, color: Color(0xFF1B1464), size: 16),
+                  SizedBox(width: 8),
+                  Text(
+                    'Add More items',
+                    style: TextStyle(fontSize: 14, color: Color(0xFF1B1464), fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  bool _shouldShowIndividualSlots(String categoryName, List<dynamic> categoryItems) {
+    if (_customIndividualSlotsCategories.contains(categoryName)) {
+      return true;
+    }
+
+    String? firstSlotKey;
+    for (var item in categoryItems) {
+      final d = item['selected_date']?.toString().trim();
+      final t = item['selected_time_slot']?.toString().trim();
+      if (d != null && d.isNotEmpty && t != null && t.isNotEmpty) {
+        final key = '$d|$t';
+        if (firstSlotKey == null) {
+          firstSlotKey = key;
+        } else if (firstSlotKey != key) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  Widget _buildCategoryGroupCard(String categoryName, List<dynamic> categoryItems) {
+    final List<String> subserviceIds = categoryItems
+        .map((item) {
+          final subservice = item['subservice_id'];
+          return subservice is Map ? subservice['_id']?.toString() : subservice?.toString();
+        })
+        .whereType<String>()
+        .toList();
+
+    String slotText = 'Select category time slot';
+    bool hasSlot = false;
+    for (var item in categoryItems) {
+      final selectedDate = item['selected_date']?.toString();
+      final selectedTimeSlot = item['selected_time_slot']?.toString();
+      if (selectedDate != null && selectedDate.isNotEmpty && selectedTimeSlot != null && selectedTimeSlot.isNotEmpty) {
+        hasSlot = true;
+        try {
+          final parsedDate = DateTime.parse(selectedDate);
+          final formattedDate = DateFormat('EEE, d MMM').format(parsedDate);
+          slotText = '$formattedDate at $selectedTimeSlot';
+        } catch (_) {
+          slotText = '$selectedDate at $selectedTimeSlot';
+        }
+        break;
+      } else if (selectedTimeSlot != null && selectedTimeSlot.isNotEmpty) {
+        hasSlot = true;
+        slotText = selectedTimeSlot;
+        break;
+      }
+    }
+
+    final bool showIndividualSlots = _shouldShowIndividualSlots(categoryName, categoryItems);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 24),
+      margin: const EdgeInsets.only(bottom: 20),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -582,212 +749,281 @@ class _CartScreenState extends State<CartScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: const Color(0xFF1B1464).withOpacity(0.06),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.home_repair_service, color: Colors.black87, size: 20),
+                child: const Icon(Icons.home_repair_service, color: Color(0xFF1B1464), size: 20),
               ),
-              const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Services',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
-                  ),
-                ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  categoryName,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          ...items.map((item) => _buildCartItem(item)),
-          const SizedBox(height: 16),
-          Center(
-            child: InkWell(
-              onTap: _onAddMoreItemsPressed,
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1B1464).withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: () async {
+              if (subserviceIds.isNotEmpty) {
+                await SlotSelectionModal.showForGroup(context, subserviceIds, categoryName);
+                if (mounted) {
+                  setState(() {
+                    _customIndividualSlotsCategories.remove(categoryName);
+                  });
+                }
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: hasSlot ? const Color(0xFF1B1464).withOpacity(0.06) : Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: hasSlot ? const Color(0xFF1B1464).withOpacity(0.18) : Colors.amber.shade300),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    size: 13,
+                    color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    slotText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.edit,
+                    size: 12,
+                    color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (categoryItems.length > 1) ...[
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: () async {
+                if (showIndividualSlots) {
+                  _customIndividualSlotsCategories.remove(categoryName);
+                  
+                  String? refDate;
+                  String? refSlot;
+                  for (var item in categoryItems) {
+                    final d = item['selected_date']?.toString();
+                    final t = item['selected_time_slot']?.toString();
+                    if (d != null && d.isNotEmpty && t != null && t.isNotEmpty) {
+                      refDate = d;
+                      refSlot = t;
+                      break;
+                    }
+                  }
+
+                  if (refDate != null && refSlot != null && subserviceIds.isNotEmpty) {
+                    setState(() => _isLoading = true);
+                    for (var sId in subserviceIds) {
+                      await ApiService.updateSlot(sId, refDate, refSlot);
+                    }
+                    final updatedCart = await ApiService.getCart();
+                    if (mounted) {
+                      if (updatedCart != null) {
+                        CartState.cartData.value = updatedCart;
+                      }
+                      setState(() => _isLoading = false);
+                    }
+                  } else if (subserviceIds.isNotEmpty) {
+                    await SlotSelectionModal.showForGroup(context, subserviceIds, categoryName);
+                    if (mounted) {
+                      setState(() {
+                        _customIndividualSlotsCategories.remove(categoryName);
+                      });
+                    }
+                  } else {
+                    setState(() {});
+                  }
+                } else {
+                  setState(() {
+                    _customIndividualSlotsCategories.add(categoryName);
+                  });
+                }
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2.0),
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.add_circle_outline, color: Color(0xFF1B1464), size: 16),
-                    SizedBox(width: 8),
+                    Icon(
+                      showIndividualSlots ? Icons.link_off_rounded : Icons.tune_rounded,
+                      size: 13,
+                      color: const Color(0xFF1B1464),
+                    ),
+                    const SizedBox(width: 6),
                     Text(
-                      'Add More items',
-                      style: TextStyle(fontSize: 14, color: Color(0xFF1B1464), fontWeight: FontWeight.bold),
+                      showIndividualSlots 
+                          ? 'Use same time slot for all services'
+                          : 'Select different time slot for each service',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1B1464),
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-          ),
+          ],
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 10),
+          ...categoryItems.map((item) => _buildCategoryCartItemRow(item, showIndividualSlots)),
         ],
       ),
     );
   }
 
-  Widget _buildCartItem(dynamic item) {
+  Widget _buildCategoryCartItemRow(dynamic item, bool showIndividualSlot) {
     final subservice = item['subservice_id'];
     if (subservice == null) return const SizedBox.shrink();
 
     final title = subservice['subservice_name'] ?? subservice['name'] ?? subservice['service_name'] ?? 'Unknown Service';
     final price = item['price_snapshot'] ?? subservice['base_price'] ?? 0;
-    final quantity = item['quantity'] ?? 1;
     final subserviceId = subservice is Map ? subservice['_id']?.toString() : subservice.toString();
     final imagePath = subservice['image'] ?? '';
 
     final selectedDate = item['selected_date']?.toString();
     final selectedTimeSlot = item['selected_time_slot']?.toString();
 
-    String slotText = 'Select time slot';
-    bool hasSlot = false;
+    String itemSlotText = 'Select time slot';
+    bool hasItemSlot = false;
     if (selectedDate != null && selectedDate.isNotEmpty && selectedTimeSlot != null && selectedTimeSlot.isNotEmpty) {
-      hasSlot = true;
+      hasItemSlot = true;
       try {
         final parsedDate = DateTime.parse(selectedDate);
         final formattedDate = DateFormat('EEE, d MMM').format(parsedDate);
-        slotText = '$formattedDate at $selectedTimeSlot';
+        itemSlotText = '$formattedDate at $selectedTimeSlot';
       } catch (_) {
-        slotText = '$selectedDate at $selectedTimeSlot';
+        itemSlotText = '$selectedDate at $selectedTimeSlot';
       }
     } else if (selectedTimeSlot != null && selectedTimeSlot.isNotEmpty) {
-      hasSlot = true;
-      slotText = selectedTimeSlot;
+      hasItemSlot = true;
+      itemSlotText = selectedTimeSlot;
     }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (imagePath.toString().isNotEmpty) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: imagePath.toString().startsWith('http')
-                  ? Image.network(
-                      imagePath,
-                      height: 50,
-                      width: 50,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(height: 50, width: 50, color: Colors.grey.shade200, child: const Icon(Icons.image, size: 20, color: Colors.grey)),
-                    )
-                  : Image.asset(
-                      imagePath,
-                      height: 50,
-                      width: 50,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(height: 50, width: 50, color: Colors.grey.shade200, child: const Icon(Icons.image, size: 20, color: Colors.grey)),
-                    ),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
+          Row(
+            children: [
+              if (imagePath.toString().isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: imagePath.toString().startsWith('http')
+                      ? Image.network(
+                          imagePath,
+                          height: 44,
+                          width: 44,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(height: 44, width: 44, color: Colors.grey.shade200, child: const Icon(Icons.image, size: 18, color: Colors.grey)),
+                        )
+                      : Image.asset(
+                          imagePath,
+                          height: 44,
+                          width: 44,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(height: 44, width: 44, color: Colors.grey.shade200, child: const Icon(Icons.image, size: 18, color: Colors.grey)),
+                        ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Text(
                   title,
                   style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
                 ),
-                const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: () {
-                    if (subserviceId != null) {
-                      SlotSelectionModal.show(context, subserviceId, title);
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: hasSlot ? const Color(0xFF1B1464).withOpacity(0.06) : Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: hasSlot ? const Color(0xFF1B1464).withOpacity(0.15) : Colors.amber.shade300),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.calendar_today,
-                          size: 11,
-                          color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          slotText,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.edit,
-                          size: 10,
-                          color: hasSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
+              ),
+              const SizedBox(width: 8),
               Text(
                 '₹${(price as num).toInt()}',
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
               ),
-              const SizedBox(height: 8),
-              Container(
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: const Color(0xFFE8E8FF), width: 1.5),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    InkWell(
-                      onTap: () {
-                        if (!_isLoading && subserviceId != null) _updateQuantity(subserviceId, quantity - 1);
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Icon(Icons.remove, size: 16, color: Color(0xFF1B1464)),
-                      ),
-                    ),
-                    Text(
-                      '$quantity',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
-                    ),
-                    InkWell(
-                      onTap: () {
-                        if (!_isLoading && subserviceId != null) _updateQuantity(subserviceId, quantity + 1);
-                      },
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Icon(Icons.add, size: 16, color: Color(0xFF1B1464)),
-                      ),
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              InkWell(
+                onTap: () {
+                  if (!_isLoading && subserviceId != null) {
+                    _updateQuantity(subserviceId, 0);
+                  }
+                },
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(6.0),
+                  child: Icon(Icons.delete_outline, size: 20, color: Colors.red.shade400),
                 ),
               ),
             ],
           ),
+          if (showIndividualSlot) ...[
+            const SizedBox(height: 6),
+            GestureDetector(
+              onTap: () {
+                if (subserviceId != null) {
+                  SlotSelectionModal.show(context, subserviceId, title);
+                }
+              },
+              child: Container(
+                margin: EdgeInsets.only(left: imagePath.toString().isNotEmpty ? 56 : 0),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: hasItemSlot ? const Color(0xFF1B1464).withOpacity(0.05) : Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: hasItemSlot ? const Color(0xFF1B1464).withOpacity(0.12) : Colors.amber.shade300),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.access_time_rounded,
+                      size: 11,
+                      color: hasItemSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      itemSlotText,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: hasItemSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.edit,
+                      size: 10,
+                      color: hasItemSlot ? const Color(0xFF1B1464) : Colors.amber.shade900,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

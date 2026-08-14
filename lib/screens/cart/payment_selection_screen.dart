@@ -30,14 +30,27 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
   bool _isProcessing = false;
   late Razorpay _razorpay;
   Completer<Map<String, dynamic>?>? _razorpayCompleter;
+  Map<String, dynamic>? _userProfile;
 
   @override
   void initState() {
     super.initState();
+    _fetchUserProfile();
     _razorpay = Razorpay();
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+  }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      final profile = await ApiService.getUserProfile();
+      if (profile != null && mounted) {
+        setState(() {
+          _userProfile = profile;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -189,12 +202,21 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
         ? keyId
         : (dotenv.env['NEXT_PUBLIC_RAZORPAY_KEY_ID'] ?? 'rzp_test_TCwlsGgFYgQdGL');
 
+    final userName = _userProfile?['name'] ?? 'BharatClap Customer';
+    final userPhone = _userProfile?['phone'] ?? '';
+    final userEmail = _userProfile?['email'] ?? '';
+
     final options = {
       'key': activeKey,
       'amount': (amount * 100).toInt(),
-      'name': 'BharatClap Customer',
+      'name': 'BharatClap',
       'description': 'Service Booking Checkout',
       'order_id': orderId,
+      'prefill': {
+        'name': userName,
+        if (userPhone.toString().isNotEmpty) 'contact': userPhone.toString(),
+        if (userEmail.toString().isNotEmpty) 'email': userEmail.toString(),
+      },
     };
 
     try {

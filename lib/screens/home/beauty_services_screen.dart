@@ -3,7 +3,7 @@ import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
 import '../../providers/cart_state.dart';
 import '../auth/login_screen.dart';
-import '../../widgets/slot_selection_modal.dart';
+import '../../widgets/app_toast.dart';
 
 class BeautyServicesScreen extends StatefulWidget {
   final String categoryId;
@@ -557,13 +557,10 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                           onTap: () async {
                             if (subserviceId != null) {
                               if (inCart) {
-                                SlotSelectionModal.show(context, subserviceId, title);
+                                AppToast.show(context, '$title is already in cart');
                                 return;
                               }
 
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Adding $title to cart...')),
-                              );
                               final rawLoc = _currentAddress?['area_locality'] ?? _currentAddress?['city'] ?? _currentAddress?['address_line_1'] ?? 'Bangalore';
                               final locName = rawLoc.toString().toLowerCase() == 'bengaluru' ? 'Bangalore' : rawLoc.toString();
 
@@ -577,8 +574,7 @@ class _BeautyServicesScreenState extends State<BeautyServicesScreen> {
                                 CartState.cartData.value = data;
                                 CartState.updateCount(data);
                                 if (context.mounted) {
-                                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                                  SlotSelectionModal.show(context, subserviceId, title);
+                                  AppToast.show(context, 'Added $title to cart');
                                 }
                               } else {
                                 if (context.mounted) {

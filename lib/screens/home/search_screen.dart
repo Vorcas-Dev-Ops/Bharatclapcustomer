@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import 'service_details_screen.dart';
 import '../../providers/cart_state.dart';
-import '../../widgets/slot_selection_modal.dart';
 import '../../widgets/app_toast.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -271,7 +270,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 onPressed: () async {
                                   if (subserviceId != null) {
                                     if (inCart) {
-                                      SlotSelectionModal.show(context, subserviceId, title);
+                                      AppToast.show(context, '$title is already in cart');
                                       return;
                                     }
                                     final addresses = await ApiService.getAddresses();
@@ -289,7 +288,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                     if (data != null && data['success'] == true) {
                                       CartState.cartData.value = data;
                                       CartState.updateCount(data);
-                                      SlotSelectionModal.show(context, subserviceId, title);
+                                      AppToast.show(context, 'Added $title to cart');
                                     } else {
                                       AppToast.show(context, data?['message'] ?? 'Failed to add $title to cart', isError: true);
                                     }

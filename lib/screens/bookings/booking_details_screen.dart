@@ -445,6 +445,79 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
   }
 
   Widget _buildAssignedProfessional() {
+    final status = _bookingData['status']?.toString().toLowerCase().trim() ?? '';
+    final isSearching = (status == 'pending' || status == 'provider_searching');
+    final isCancelledOrExpired = [
+      'cancelled',
+      'canceled',
+      'expired',
+      'expired_timeout',
+      'unassigned_timeout',
+      'high_demand_timeout',
+      'rejected',
+      'failed',
+    ].contains(status);
+
+    if (isSearching) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Searching for nearby professional...',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.orange),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (isCancelledOrExpired) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.red.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 20, color: Colors.red.shade700),
+                const SizedBox(width: 8),
+                Text(
+                  'Booking Cancelled',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red.shade800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No professional was assigned by the scheduled time slot. Any deducted amount will be refunded to your account within 4-5 working days.',
+              style: TextStyle(fontSize: 13, color: Colors.red.shade900, height: 1.4),
+            ),
+          ],
+        ),
+      );
+    }
+
     final provider = _bookingData['provider_id'];
     String providerName = 'Professional';
     String providerType = 'Service Provider';

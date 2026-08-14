@@ -46,25 +46,55 @@ class _BookingsScreenState extends State<BookingsScreen> {
   }
 
   List<dynamic> _getFilteredBookings() {
+    final now = DateTime.now();
     return _allBookings.where((booking) {
       final status = booking['status']?.toString().toLowerCase().trim() ?? '';
       
       final completedStatuses = [
         'completed',
+        'service_completed',
         'finished',
         'cancelled',
         'canceled',
         'rejected',
+        'expired',
+        'expired_timeout',
         'unassigned_timeout',
         'high_demand_timeout',
         'failed',
       ];
 
+      // Check if scheduled date & time (plus 2 hours grace) has passed for unassigned searching bookings
+      bool isPastUnassigned = false;
+      if (booking['scheduled_at'] != null) {
+        try {
+          final dateStr = booking['scheduled_at'].toString().split('T').first;
+          DateTime baseDate = DateTime.parse(dateStr);
+          final timeStr = booking['booking_time']?.toString() ?? '';
+          if (timeStr.isNotEmpty && timeStr != 'Flexible') {
+            try {
+              final parsedTime = DateFormat('hh:mm a').parse(timeStr);
+              baseDate = DateTime(
+                baseDate.year,
+                baseDate.month,
+                baseDate.day,
+                parsedTime.hour,
+                parsedTime.minute,
+              );
+            } catch (_) {}
+          } else {
+            baseDate = DateTime(baseDate.year, baseDate.month, baseDate.day, 23, 59, 59);
+          }
+          final cutoff = baseDate.add(const Duration(minutes: 15));
+          if (cutoff.isBefore(now) && (status == 'pending' || status == 'provider_searching')) {
+            isPastUnassigned = true;
+          }
+        } catch (_) {}
+      }
+
+      final isCompletedOrExpired = completedStatuses.contains(status) || isPastUnassigned;
+
       final ongoingStatuses = [
-        'accepted',
-        'assigned',
-        'confirmed',
-        'scheduled',
         'on_the_way',
         'arrived',
         'reached',
@@ -73,19 +103,17 @@ class _BookingsScreenState extends State<BookingsScreen> {
         'started',
         'ongoing',
         'waiting_end_otp',
-        'pending',
-        'provider_searching',
       ];
 
       if (_selectedTab == 0) {
-        // Upcoming: Any active non-completed booking
-        return !completedStatuses.contains(status);
+        // Upcoming: Active searching or scheduled bookings (NOT completed, NOT expired, NOT ongoing)
+        return !isCompletedOrExpired && !ongoingStatuses.contains(status);
       } else if (_selectedTab == 1) {
-        // Ongoing: Active bookings assigned, in transit, or in service
-        return ongoingStatuses.contains(status) && !completedStatuses.contains(status);
+        // Ongoing: Accepted / In-service active bookings
+        return ongoingStatuses.contains(status) && !isCompletedOrExpired;
       } else {
-        // Completed: Finished or cancelled/expired bookings
-        return completedStatuses.contains(status);
+        // Completed: Finished, Cancelled, Expired, or past unassigned bookings
+        return isCompletedOrExpired;
       }
     }).toList();
   }
@@ -222,7 +250,6 @@ class _BookingsScreenState extends State<BookingsScreen> {
   Widget _buildBookingCard(dynamic booking) {
     // Extract data from booking object securely
     final bookingId = booking['booking_id'] ?? '#---';
-    final status = booking['status']?.toString().toUpperCase() ?? 'PENDING';
     final payableAmount = booking['payable_amount']?.toString() ?? '0';
 
     // Subservice details
@@ -248,13 +275,32 @@ class _BookingsScreenState extends State<BookingsScreen> {
       // Ignore format errors
     }
 
-    // Provider details
+    final lowerStatus = booking['status']?.toString().toLowerCase().trim() ?? '';
+    final isSearchingOrPending = (lowerStatus == 'pending' || lowerStatus == 'provider_searching');
+    final isAcceptedOrAssigned = [
+      'accepted',
+      'assigned',
+      'confirmed',
+      'scheduled',
+      'on_the_way',
+      'arrived',
+      'reached',
+      'waiting_start_otp',
+      'in_progress',
+      'started',
+      'ongoing',
+      'waiting_end_otp',
+      'completed',
+      'finished',
+    ].contains(lowerStatus);
+
+    // Provider details - ONLY display provider name if provider has ACCEPTED / BEEN ASSIGNED to the job!
     final provider = booking['provider_id'];
     String? providerName;
     String? providerType;
     String? providerRating;
     
-    if (provider != null && provider is Map) {
+    if (isAcceptedOrAssigned && provider != null && provider is Map) {
       final pUser = provider['user_id'];
       if (pUser != null && pUser is Map) {
         providerName = pUser['name'] ?? pUser['phone'];
@@ -263,26 +309,47 @@ class _BookingsScreenState extends State<BookingsScreen> {
       providerRating = provider['rating']?.toString();
     }
     
-    // Status color mapping
-    Color statusBgColor = Colors.grey.shade50;
-    Color statusTextColor = Colors.grey.shade700;
+    // Status text & color mapping
+    String statusDisplay = 'SEARCHING FOR PROVIDER';
+    Color statusBgColor = Colors.orange.shade50;
+    Color statusTextColor = Colors.orange.shade800;
     
-    final lowerStatus = booking['status']?.toString().toLowerCase();
-    if (lowerStatus == 'pending') {
-      statusBgColor = Colors.orange.shade50;
-      statusTextColor = Colors.orange.shade700;
-    } else if (lowerStatus == 'accepted') {
-      statusBgColor = Colors.blue.shade50;
-      statusTextColor = Colors.blue.shade700;
-    } else if (lowerStatus == 'in_progress' || lowerStatus == 'started') {
-      statusBgColor = Colors.purple.shade50;
-      statusTextColor = Colors.purple.shade700;
-    } else if (lowerStatus == 'completed') {
+    if (lowerStatus == 'completed' || lowerStatus == 'finished') {
+      statusDisplay = 'COMPLETED';
       statusBgColor = Colors.green.shade50;
       statusTextColor = Colors.green.shade700;
-    } else if (lowerStatus == 'cancelled') {
+    } else if (lowerStatus == 'cancelled' || lowerStatus == 'canceled' || lowerStatus == 'rejected') {
+      statusDisplay = 'CANCELLED';
       statusBgColor = Colors.red.shade50;
       statusTextColor = Colors.red.shade700;
+    } else if (lowerStatus == 'expired' ||
+        lowerStatus == 'expired_timeout' ||
+        lowerStatus == 'unassigned_timeout' ||
+        lowerStatus == 'high_demand_timeout' ||
+        lowerStatus == 'failed') {
+      statusDisplay = 'CANCELLED';
+      statusBgColor = Colors.red.shade50;
+      statusTextColor = Colors.red.shade700;
+    } else if (isSearchingOrPending) {
+      if (_selectedTab == 2) {
+        statusDisplay = 'CANCELLED';
+        statusBgColor = Colors.red.shade50;
+        statusTextColor = Colors.red.shade700;
+      } else {
+        statusDisplay = 'SEARCHING FOR PROVIDER';
+        statusBgColor = Colors.orange.shade50;
+        statusTextColor = Colors.orange.shade800;
+      }
+    } else if (lowerStatus == 'accepted' || lowerStatus == 'assigned' || lowerStatus == 'scheduled') {
+      statusDisplay = 'CONFIRMED';
+      statusBgColor = Colors.blue.shade50;
+      statusTextColor = Colors.blue.shade700;
+    } else if (lowerStatus == 'in_progress' || lowerStatus == 'started' || lowerStatus == 'ongoing') {
+      statusDisplay = 'IN PROGRESS';
+      statusBgColor = Colors.purple.shade50;
+      statusTextColor = Colors.purple.shade700;
+    } else {
+      statusDisplay = lowerStatus.replaceAll('_', ' ').toUpperCase();
     }
 
     return Container(
@@ -339,7 +406,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  status,
+                  statusDisplay,
                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusTextColor),
                 ),
               ),
@@ -410,7 +477,9 @@ class _BookingsScreenState extends State<BookingsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Waiting for professional',
+                  (statusDisplay == 'CANCELLED' || lowerStatus == 'cancelled' || lowerStatus == 'canceled' || lowerStatus == 'expired' || lowerStatus == 'unassigned_timeout' || lowerStatus == 'high_demand_timeout')
+                      ? 'No professional assigned'
+                      : 'Waiting for professional',
                   style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.grey.shade600),
                 ),
                 Text(
@@ -418,6 +487,42 @@ class _BookingsScreenState extends State<BookingsScreen> {
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
                 ),
               ],
+            ),
+          ],
+
+          if (statusDisplay == 'CANCELLED' ||
+              lowerStatus == 'cancelled' ||
+              lowerStatus == 'canceled' ||
+              lowerStatus == 'expired' ||
+              lowerStatus == 'expired_timeout' ||
+              lowerStatus == 'unassigned_timeout' ||
+              lowerStatus == 'high_demand_timeout' ||
+              lowerStatus == 'failed') ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: Colors.red.shade700),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Booking cancelled: Deducted amount will be refunded within 4-5 working days.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade900,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
           

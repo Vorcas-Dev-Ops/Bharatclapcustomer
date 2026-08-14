@@ -284,8 +284,14 @@ class _BasicDetailsScreenState extends State<BasicDetailsScreen> {
                       _selectedGender = newValue;
                     });
                   },
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Gender is required';
+                    }
+                    return null;
+                  },
                   decoration: InputDecoration(
-                    labelText: 'Gender (Optional)',
+                    labelText: 'Gender *',
                     labelStyle: TextStyle(color: Colors.grey.shade600),
                     filled: true,
                     fillColor: Colors.white,

@@ -6,7 +6,6 @@ import 'service_details_screen.dart';
 import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
 import '../../providers/cart_state.dart';
-import '../../widgets/slot_selection_modal.dart';
 import '../../widgets/app_toast.dart';
 
 class CategoriesScreen extends StatefulWidget {
@@ -535,8 +534,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                           final inCart = CartState.isItemInCart(subserviceId);
                           return GestureDetector(
                             onTap: () {
-                              if (inCart && subserviceId != null) {
-                                SlotSelectionModal.show(context, subserviceId, title);
+                              if (inCart) {
+                                AppToast.show(context, '$title is already in cart');
                               } else {
                                 _handleAddToCart(service);
                               }
@@ -611,7 +610,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       if (data != null && data['success'] == true) {
         CartState.cartData.value = data;
         CartState.updateCount(data);
-        SlotSelectionModal.show(context, subserviceId, title);
+        AppToast.show(context, 'Added $title to cart');
       } else {
         if (data?['message'] == 'Please login first' || data?['message'] == 'Please Login first') {
           AppToast.show(context, 'Please login to add items to cart', isError: true);

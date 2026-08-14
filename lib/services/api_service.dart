@@ -25,11 +25,26 @@ class ApiService {
     debugPrint('[ApiService] Connection error: $e');
   }
 
-  static bool _isRefreshing = false;
+  static String? _extractRefreshTokenFromHeaders(Map<String, String> headers) {
+    final rawCookie = headers['set-cookie'] ?? headers['Set-Cookie'];
+    if (rawCookie != null && rawCookie.isNotEmpty) {
+      final cookies = rawCookie.split(',');
+      for (var cookie in cookies) {
+        final trimmed = cookie.trim();
+        if (trimmed.startsWith('jwt=')) {
+          final parts = trimmed.split(';');
+          if (parts.isNotEmpty) {
+            return parts[0].substring(4); // Remove 'jwt=' prefix
+          }
+        }
+      }
+    }
+    return null;
+  }
 
-  static Future<bool> _refreshAccessToken() async {
-    if (_isRefreshing) return false;
-    _isRefreshing = true;
+  static Future<bool>? _refreshFuture;
+
+  static Future<bool> _performTokenRefresh() async {
     try {
       final refreshToken = await getRefreshToken();
       final currentToken = await getToken();
@@ -50,16 +65,22 @@ class ApiService {
         final data = jsonDecode(response.body);
         final newToken = data['token'] ?? data['accessToken'];
         if (newToken != null && newToken is String && newToken.isNotEmpty) {
-          await saveToken(newToken);
-          _isRefreshing = false;
+          final newRefreshToken = _extractRefreshTokenFromHeaders(response.headers);
+          await saveToken(newToken, refreshToken: newRefreshToken);
           return true;
         }
       }
     } catch (e) {
       debugPrint('[ApiService] Token refresh failed: $e');
     }
-    _isRefreshing = false;
     return false;
+  }
+
+  static Future<bool> _refreshAccessToken() async {
+    _refreshFuture ??= _performTokenRefresh();
+    final success = await _refreshFuture;
+    _refreshFuture = null;
+    return success ?? false;
   }
 
   static Future<http.Response> _get(Uri url, {Map<String, String>? headers}) async {
@@ -259,7 +280,10 @@ class ApiService {
       if (data['success'] == true) {
         final user = data['user'];
         final token = user?['token'] ?? data['token'];
-        final refreshToken = user?['refreshToken'] ?? data['refreshToken'];
+        String? refreshToken = user?['refreshToken'] ?? data['refreshToken'];
+        if (refreshToken == null || refreshToken.isEmpty) {
+          refreshToken = _extractRefreshTokenFromHeaders(response.headers);
+        }
         if (token != null && token != 'pending_auth_token') {
           await saveToken(token, refreshToken: refreshToken);
         }
@@ -294,8 +318,10 @@ class ApiService {
       data['success'] = response.statusCode == 200 || response.statusCode == 201;
 
       if (data['success'] == true) {
-        if (data['token'] != null) {
-          await saveToken(data['token']);
+        final token = data['token'] ?? (data['user'] != null ? data['user']['token'] : null);
+        final refreshToken = _extractRefreshTokenFromHeaders(response.headers);
+        if (token != null) {
+          await saveToken(token, refreshToken: refreshToken);
         }
       }
       return data;
@@ -321,8 +347,9 @@ class ApiService {
 
       if (data['success'] == true) {
         final token = data['token'] ?? (data['user'] != null ? data['user']['token'] : null);
+        final refreshToken = _extractRefreshTokenFromHeaders(response.headers);
         if (token != null) {
-          await saveToken(token);
+          await saveToken(token, refreshToken: refreshToken);
         }
       }
       return data;
@@ -346,8 +373,10 @@ class ApiService {
       data['success'] = response.statusCode == 200 || response.statusCode == 201;
 
       if (data['success'] == true) {
-        if (data['token'] != null) {
-          await saveToken(data['token']);
+        final token = data['token'] ?? (data['user'] != null ? data['user']['token'] : null);
+        final refreshToken = _extractRefreshTokenFromHeaders(response.headers);
+        if (token != null) {
+          await saveToken(token, refreshToken: refreshToken);
         }
       }
       return data;

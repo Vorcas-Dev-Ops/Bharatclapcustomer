@@ -3,7 +3,6 @@ import '../../services/api_service.dart';
 import '../cart/cart_screen.dart';
 import '../../providers/cart_state.dart';
 import '../auth/login_screen.dart';
-import '../../widgets/slot_selection_modal.dart';
 import '../../widgets/app_toast.dart';
 
 class ServiceDetailsScreen extends StatefulWidget {
@@ -277,7 +276,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                         onTap: () async {
                           if (widget.subserviceId != null) {
                             if (inCart) {
-                              SlotSelectionModal.show(context, widget.subserviceId!, widget.title);
+                              AppToast.show(context, '${widget.title} is already in cart');
                               return;
                             }
 
@@ -294,7 +293,7 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                                CartState.cartData.value = data;
                                CartState.updateCount(data);
                                if (context.mounted) {
-                                 SlotSelectionModal.show(context, widget.subserviceId!, widget.title);
+                                 AppToast.show(context, 'Added ${widget.title} to cart');
                                }
                              } else {
                                if (context.mounted) {
