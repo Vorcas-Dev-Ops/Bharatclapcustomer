@@ -718,7 +718,16 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['data'] != null && decoded['data'] is Map<String, dynamic>) {
+            return decoded['data'] as Map<String, dynamic>;
+          }
+          if (decoded['booking'] != null && decoded['booking'] is Map<String, dynamic>) {
+            return decoded['booking'] as Map<String, dynamic>;
+          }
+          return decoded;
+        }
       }
       return null;
     } catch (e) {
@@ -908,20 +917,33 @@ class ApiService {
   }
 
   // Request Account Deletion (DPDPA Right to Erasure - 30 days cooling period)
-  static Future<Map<String, dynamic>> requestAccountDeletion() async {
+  static Future<Map<String, dynamic>> requestAccountDeletion({String? reason}) async {
     try {
       final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
       final response = await _post(
-        Uri.parse('$baseUrl/users/me/delete-request'),
+        Uri.parse('$baseUrl/users/deletion/initiate'),
         headers: {
           'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $token',
         },
+        body: jsonEncode({
+          if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+        }),
       );
+
+      final data = jsonDecode(response.body);
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return jsonDecode(response.body);
+        return {
+          'success': true,
+          'status': data['status'],
+          'scheduled_deletion_date': data['scheduled_deletion_date'] ?? data['scheduled_date'],
+          'blocking_obligations': data['blocking_obligations'],
+          'message': data['message'] ?? 'Account deletion request initiated',
+        };
       }
-      return {'success': false, 'message': jsonDecode(response.body)['message'] ?? 'Failed to request account deletion'};
+      return {'success': false, 'message': data['message'] ?? 'Failed to request account deletion'};
     } catch (e) {
       return {'success': false, 'message': 'Failed to request account deletion: $e'};
     }
@@ -931,17 +953,21 @@ class ApiService {
   static Future<Map<String, dynamic>> cancelAccountDeletion() async {
     try {
       final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
       final response = await _delete(
         Uri.parse('$baseUrl/users/me/delete-request'),
         headers: {
           'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
+          'Authorization': 'Bearer $token',
         },
       );
+
+      final data = jsonDecode(response.body);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return {'success': true, 'message': data['message'] ?? 'Account deletion request cancelled successfully'};
       }
-      return {'success': false, 'message': jsonDecode(response.body)['message'] ?? 'Failed to cancel account deletion'};
+      return {'success': false, 'message': data['message'] ?? 'Failed to cancel deletion request'};
     } catch (e) {
       return {'success': false, 'message': 'Failed to cancel account deletion: $e'};
     }
@@ -967,11 +993,24 @@ class ApiService {
     }
   }
 
+  static String _normalizeDateString(String? dateStr) {
+    if (dateStr == null || dateStr.trim().isEmpty) return '';
+    String d = dateStr.trim();
+    if (d.contains('T')) {
+      d = d.split('T')[0];
+    } else if (d.contains(' ')) {
+      d = d.split(' ')[0];
+    }
+    return d;
+  }
+
   // Update Slot for Cart Item
   static Future<Map<String, dynamic>?> updateSlot(String subserviceId, String selectedDate, String selectedTimeSlot) async {
     try {
       final token = await getToken();
       if (token == null) return null;
+
+      final cleanDate = _normalizeDateString(selectedDate);
 
       final response = await _put(
         Uri.parse('$baseUrl/cart/slot'),
@@ -981,7 +1020,7 @@ class ApiService {
         },
         body: jsonEncode({
           'subservice_id': subserviceId,
-          'selected_date': selectedDate,
+          'selected_date': cleanDate,
           'selected_time_slot': selectedTimeSlot,
         }),
       );
@@ -994,21 +1033,82 @@ class ApiService {
     }
   }
 
+  // Validate Multi-Service Schedule & Get Signed Schedule Token
+  static Future<Map<String, dynamic>> validateSchedule({
+    required String addressId,
+    String? preferredDate,
+    String? preferredStartTime,
+    String schedulingMode = 'sequential',
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'available': false, 'message': 'Not logged in'};
+
+      final cleanDate = _normalizeDateString(preferredDate);
+
+      final response = await _post(
+        Uri.parse('$baseUrl/bookings/validate-schedule'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'address_id': addressId,
+          'preferred_date': cleanDate.isNotEmpty ? cleanDate : null,
+          'preferred_start_time': preferredStartTime,
+          'scheduling_mode': schedulingMode,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return data;
+      }
+      return {'available': false, 'message': data['message'] ?? 'Schedule validation failed'};
+    } catch (e) {
+      return {'available': false, 'message': 'Network error during schedule validation'};
+    }
+  }
+
   // Checkout / Create Booking
-  static Future<Map<String, dynamic>?> createBooking(String addressId, String paymentMethod, {String? couponCode, String? paymentId}) async {
+  static Future<Map<String, dynamic>?> createBooking(
+    String addressId,
+    String paymentMethod, {
+    String? couponCode,
+    String? paymentId,
+    String? scheduleToken,
+    String? preferredDate,
+    String? preferredStartTime,
+    String schedulingMode = 'sequential',
+  }) async {
     try {
       final token = await getToken();
       if (token == null) return null;
 
+      final cleanDate = _normalizeDateString(preferredDate);
+
       final Map<String, dynamic> body = {
         'address': addressId,
         'payment_method': paymentMethod,
+        'scheduling_mode': schedulingMode,
       };
       if (couponCode != null && couponCode.isNotEmpty) {
         body['coupon_code'] = couponCode;
       }
       if (paymentId != null && paymentId.isNotEmpty) {
         body['payment_id'] = paymentId;
+      }
+      if (scheduleToken != null && scheduleToken.isNotEmpty) {
+        body['schedule_token'] = scheduleToken;
+      }
+      if (cleanDate.isNotEmpty) {
+        body['preferred_date'] = cleanDate;
+      }
+      if (preferredStartTime != null && preferredStartTime.isNotEmpty) {
+        body['preferred_start_time'] = preferredStartTime;
+      }
+      if (preferredStartTime != null && preferredStartTime.isNotEmpty) {
+        body['preferred_start_time'] = preferredStartTime;
       }
 
       final response = await _post(
@@ -1292,6 +1392,59 @@ class ApiService {
       return [];
     } catch (_) {
       return [];
+    }
+  }
+
+  // Initiate Phone Change (Send OTP)
+  static Future<Map<String, dynamic>> initiatePhoneChange(String newPhone) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
+      final response = await _post(
+        Uri.parse('$baseUrl/users/phone-change/initiate'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'newPhone': newPhone}),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'message': data['message'] ?? 'OTP sent to new phone number'};
+      }
+      return {'success': false, 'message': data['message'] ?? 'Failed to initiate phone change'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
+    }
+  }
+
+  // Verify Phone Change (Confirm OTP & Update)
+  static Future<Map<String, dynamic>> verifyPhoneChange(String newPhone, String otp) async {
+    try {
+      final token = await getToken();
+      if (token == null) return {'success': false, 'message': 'Not logged in'};
+
+      final response = await _post(
+        Uri.parse('$baseUrl/users/phone-change/verify'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'newPhone': newPhone,
+          'otp': otp,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return {'success': true, 'message': data['message'] ?? 'Phone number updated successfully!', 'user': data['user'] ?? data['data']};
+      }
+      return {'success': false, 'message': data['message'] ?? 'Invalid OTP or verification failed'};
+    } catch (e) {
+      return {'success': false, 'message': 'Network error: $e'};
     }
   }
 }

@@ -32,6 +32,13 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
   Completer<Map<String, dynamic>?>? _razorpayCompleter;
   Map<String, dynamic>? _userProfile;
 
+  String get _cleanDate {
+    final d = widget.selectedDate;
+    if (d.contains('T')) return d.split('T')[0];
+    if (d.contains(' ')) return d.split(' ')[0];
+    return d;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -88,10 +95,25 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
     setState(() => _isProcessing = true);
 
     try {
+      // 0. Validate Multi-Service Schedule & Obtain HMAC schedule_token
+      final scheduleRes = await ApiService.validateSchedule(
+        addressId: widget.addressId,
+        preferredDate: widget.selectedDate,
+        preferredStartTime: widget.selectedTime,
+      );
+
+      final String? scheduleToken = scheduleRes['schedule_token'] ?? scheduleRes['scheduleToken'];
+      if (scheduleRes['available'] == false && (scheduleToken == null || scheduleToken.isEmpty)) {
+        if (mounted) {
+          _showFailureDialog(scheduleRes['message'] ?? 'Selected schedule slot is no longer available. Please select another slot.');
+        }
+        return;
+      }
+
       if (_selectedMethod == PaymentMethod.razorpay) {
-        await _handleRazorpayPayment();
+        await _handleRazorpayPayment(scheduleToken);
       } else {
-        await _handleCodPayment();
+        await _handleCodPayment(scheduleToken);
       }
     } catch (e) {
       if (mounted) {
@@ -110,7 +132,7 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
   }
 
   // 💳 Secure Razorpay Online Payment Flow
-  Future<void> _handleRazorpayPayment() async {
+  Future<void> _handleRazorpayPayment(String? scheduleToken) async {
     // 1. Call Backend to create Razorpay Order securely
     String razorpayOrderId = '';
     String keyId = '';
@@ -156,7 +178,14 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
     } catch (_) {}
 
     // 4. Create Final Booking with online payment and payment_id link
-    final bookingRes = await ApiService.createBooking(widget.addressId, 'online', paymentId: paymentId);
+    final bookingRes = await ApiService.createBooking(
+      widget.addressId,
+      'online',
+      paymentId: paymentId,
+      scheduleToken: scheduleToken,
+      preferredDate: widget.selectedDate,
+      preferredStartTime: widget.selectedTime,
+    );
     if (bookingRes != null && bookingRes['success'] == true) {
       await CartState.fetchCart();
       if (mounted) {
@@ -175,8 +204,14 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
   }
 
   // 💵 Cash on Delivery (Pay After Service) Flow
-  Future<void> _handleCodPayment() async {
-    final bookingRes = await ApiService.createBooking(widget.addressId, 'cod');
+  Future<void> _handleCodPayment(String? scheduleToken) async {
+    final bookingRes = await ApiService.createBooking(
+      widget.addressId,
+      'cod',
+      scheduleToken: scheduleToken,
+      preferredDate: widget.selectedDate,
+      preferredStartTime: widget.selectedTime,
+    );
 
     if (bookingRes != null && bookingRes['success'] == true) {
       await CartState.fetchCart();
@@ -305,7 +340,7 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text('Date:', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                          Text(widget.selectedDate, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text(_cleanDate, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -414,7 +449,7 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('Scheduled Date', style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-                              Text(widget.selectedDate, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                              Text(_cleanDate, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                             ],
                           ),
                           const SizedBox(height: 8),

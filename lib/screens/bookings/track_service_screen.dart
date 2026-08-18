@@ -105,27 +105,29 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
   }
 
   int _calculateCurrentStep(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-      case 'provider_searching':
-        return 0;
-      case 'accepted':
-        return 1;
-      case 'on_the_way':
-        return 2;
-      case 'arrived':
-      case 'waiting_start_otp':
-        return 3;
-      case 'in_progress':
-      case 'started':
-        return 4;
-      case 'waiting_end_otp':
-        return 5;
-      case 'completed':
-        return 6;
-      default:
-        return 1;
+    final s = status.toLowerCase().trim();
+    if (s.contains('complete') || s.contains('closed') || s.contains('done') || s.contains('finalised')) {
+      return 6;
     }
+    if (s == 'waiting_end_otp' || s.contains('end_otp') || s.contains('verify')) {
+      return 5;
+    }
+    if (s == 'in_progress' || s == 'started' || s.contains('progress')) {
+      return 4;
+    }
+    if (s == 'arrived' || s == 'waiting_start_otp' || s.contains('arriv') || s.contains('reach')) {
+      return 3;
+    }
+    if (s == 'on_the_way' || s.contains('way')) {
+      return 2;
+    }
+    if (s == 'accepted' || s == 'assigned' || s.contains('accept') || s.contains('assign')) {
+      return 1;
+    }
+    if (s == 'pending' || s == 'provider_searching' || s.contains('search')) {
+      return 0;
+    }
+    return 1;
   }
 
   void _makePhoneCall(String? phoneNumber) {
@@ -215,7 +217,11 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
       );
     }
 
-    final status = _bookingData?['status']?.toString().toLowerCase() ?? 'pending';
+    final status = (_bookingData?['status'] ??
+                    _bookingData?['booking_status'] ??
+                    _bookingData?['booking']?['status'] ??
+                    _bookingData?['data']?['status'] ??
+                    'pending').toString().toLowerCase().trim();
     final currentStep = _calculateCurrentStep(status);
     final isArrived = status == 'arrived' || status == 'waiting_start_otp' || currentStep >= 3;
 
@@ -258,37 +264,42 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFAFAFA),
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeader(context),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: _buildProfessionalBanner(
-                name: providerName,
-                profession: providerProfession,
-                rating: providerRating,
-                phone: providerPhone,
-                status: status,
-                isArrived: isArrived,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(context),
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: _buildServiceDetailsCard(),
               ),
-            ),
-            const SizedBox(height: 28),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20.0),
-              child: Text(
-                'Service Status',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1B1464),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: _buildProfessionalBanner(
+                  name: providerName,
+                  profession: providerProfession,
+                  rating: providerRating,
+                  phone: providerPhone,
+                  status: status,
+                  isArrived: isArrived,
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: Padding(
+              const SizedBox(height: 24),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20.0),
+                child: Text(
+                  'Service Status',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1B1464),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: _buildTimeline(
                   currentStep: currentStep,
@@ -297,8 +308,9 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
                   endOtp: endOtp,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
       ),
     );
@@ -338,6 +350,132 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
     );
   }
 
+  Widget _buildServiceDetailsCard() {
+    if (_bookingData == null) return const SizedBox.shrink();
+
+    final subservice = _bookingData!['subservice_id'];
+    String serviceName = 'Service Request';
+    if (subservice != null && subservice is Map) {
+      serviceName = (subservice['subservice_name'] ?? subservice['name'] ?? 'Service').toString();
+    } else if (_bookingData!['service_name'] != null && _bookingData!['service_name'].toString().isNotEmpty) {
+      serviceName = _bookingData!['service_name'].toString();
+    } else if (_bookingData!['title'] != null) {
+      serviceName = _bookingData!['title'].toString();
+    }
+
+    final bookingIdStr = _bookingData!['booking_id'] ?? _bookingData!['_id'] ?? '#---';
+    final payableAmount = (_bookingData!['payable_amount'] ?? _bookingData!['total_amount'] ?? '0').toString();
+    final bookingDate = _bookingData!['booking_date']?.toString() ?? _bookingData!['scheduled_at']?.toString() ?? '';
+    final bookingTime = _bookingData!['booking_time']?.toString() ?? _bookingData!['slot']?.toString() ?? '';
+
+    String formattedSchedule = '';
+    if (bookingDate.isNotEmpty) {
+      formattedSchedule = bookingTime.isNotEmpty ? '$bookingDate • $bookingTime' : bookingDate;
+    } else if (bookingTime.isNotEmpty) {
+      formattedSchedule = bookingTime;
+    }
+
+    String addressText = '';
+    final addrObj = _bookingData!['address_id'];
+    if (addrObj is Map) {
+      final line1 = (addrObj['address_line'] ?? addrObj['address_line_1'] ?? addrObj['area_locality'] ?? '').toString();
+      final city = (addrObj['city'] ?? '').toString();
+      final pincode = (addrObj['pincode'] ?? '').toString();
+      addressText = [line1, city, pincode].where((s) => s.isNotEmpty).join(', ');
+    } else if (addrObj is String && addrObj.isNotEmpty) {
+      addressText = addrObj;
+    } else if (_bookingData!['address'] != null) {
+      addressText = _bookingData!['address'].toString();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF1FE),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.handyman_outlined, color: Color(0xFF1B1464), size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      serviceName,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Ref ID: $bookingIdStr',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '₹$payableAmount',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B1464)),
+              ),
+            ],
+          ),
+          if (formattedSchedule.isNotEmpty) ...[
+            const Divider(height: 20),
+            Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.black54),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    formattedSchedule,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (addressText.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on_outlined, size: 14, color: Colors.black54),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    addressText,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfessionalBanner({
     required String name,
     required String profession,
@@ -346,28 +484,35 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
     required String status,
     required bool isArrived,
   }) {
+    final s = status.toLowerCase().trim();
     String statusLabel = 'Searching...';
     Color pillBg = const Color(0xFFE8E8FF);
     Color pillText = const Color(0xFF1B1464);
 
-    if (status == 'on_the_way') {
-      statusLabel = 'On the Way';
-      pillBg = Colors.blue.shade100;
-      pillText = Colors.blue.shade900;
-    } else if (status == 'arrived' || status == 'waiting_start_otp') {
-      statusLabel = 'Arrived';
+    if (s.contains('complete') || s.contains('closed') || s.contains('done') || s.contains('finalised')) {
+      statusLabel = 'Service Completed';
+      pillBg = Colors.green.shade100;
+      pillText = Colors.green.shade900;
+    } else if (s == 'waiting_end_otp' || s.contains('end_otp') || s.contains('verify')) {
+      statusLabel = 'Verification';
       pillBg = Colors.amber.shade100;
       pillText = Colors.amber.shade900;
-    } else if (status == 'in_progress' || status == 'started') {
+    } else if (s == 'in_progress' || s == 'started' || s.contains('progress')) {
       statusLabel = 'In Progress';
       pillBg = Colors.purple.shade100;
       pillText = Colors.purple.shade900;
-    } else if (status == 'completed') {
-      statusLabel = 'Completed';
-      pillBg = Colors.green.shade100;
-      pillText = Colors.green.shade900;
-    } else if (status == 'accepted') {
+    } else if (s == 'arrived' || s == 'waiting_start_otp' || s.contains('arriv') || s.contains('reach')) {
+      statusLabel = 'Arrived';
+      pillBg = Colors.amber.shade100;
+      pillText = Colors.amber.shade900;
+    } else if (s == 'on_the_way' || s.contains('way')) {
+      statusLabel = 'On the Way';
+      pillBg = Colors.blue.shade100;
+      pillText = Colors.blue.shade900;
+    } else if (s == 'accepted' || s == 'assigned' || s.contains('accept') || s.contains('assign')) {
       statusLabel = 'Assigned';
+      pillBg = const Color(0xFFE8E8FF);
+      pillText = const Color(0xFF1B1464);
     }
 
     return Container(
@@ -512,6 +657,8 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
     final bookingCode = _bookingData?['booking_id']?.toString() ?? _bookingData?['_id']?.toString() ?? '';
 
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         _buildTimelineItem(
           index: 0,
@@ -680,7 +827,6 @@ class _TrackServiceScreenState extends State<TrackServiceScreen> {
     bool isCompleted = index < currentStep || (status == 'completed' && index <= currentStep);
     bool isActive = index == currentStep && status != 'completed';
 
-    Color dotColor = isCompleted || isActive ? const Color(0xFF1B1464) : Colors.grey.shade300;
     Color lineColor = isCompleted ? const Color(0xFF1B1464) : Colors.grey.shade200;
     Color titleColor = isCompleted || isActive ? Colors.black87 : Colors.grey.shade400;
     Color subtitleColor = isCompleted || isActive ? Colors.grey.shade600 : Colors.grey.shade400;

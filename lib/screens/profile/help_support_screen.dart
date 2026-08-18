@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../auth/login_screen.dart';
+import 'delete_account_modal.dart';
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({super.key});
@@ -401,7 +402,10 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                             title: const Text('Delete Account', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red)),
                             subtitle: const Text('Initiate 30-day cooling period for permanent erasure', style: TextStyle(fontSize: 11, color: Colors.grey)),
                             trailing: const Icon(Icons.chevron_right, color: Colors.red, size: 20),
-                            onTap: _showDeleteAccountDialog,
+                            onTap: () async {
+                              await DeleteAccountModal.show(context);
+                              _fetchProfile();
+                            },
                           ),
                       ],
                     ),

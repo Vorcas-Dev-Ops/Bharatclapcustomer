@@ -316,7 +316,8 @@ class _CartScreenState extends State<CartScreen> {
 
     final totalAmount = (cartData?['total_amount'] as num?)?.toDouble() ?? 0.0;
     final firstItem = items[0];
-    final selectedDate = firstItem['selected_date']?.toString() ?? DateTime.now().toString().split(' ')[0];
+    final rawDate = firstItem['selected_date']?.toString() ?? DateTime.now().toString().split(' ')[0];
+    final selectedDate = rawDate.contains('T') ? rawDate.split('T')[0] : (rawDate.contains(' ') ? rawDate.split(' ')[0] : rawDate);
     final selectedTime = firstItem['selected_time_slot']?.toString() ?? '02:00 PM';
     
     Navigator.push(

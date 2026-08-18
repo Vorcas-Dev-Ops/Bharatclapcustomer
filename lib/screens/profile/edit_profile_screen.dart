@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_toast.dart';
 
+import 'phone_change_modal.dart';
+
 class EditProfileScreen extends StatefulWidget {
   final Map<String, dynamic>? userProfile;
   const EditProfileScreen({super.key, this.userProfile});
@@ -155,13 +157,51 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 20),
 
                 // Phone field
-                const Text('Phone Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
-                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Phone Number', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+                    TextButton.icon(
+                      onPressed: () {
+                        PhoneChangeModal.show(
+                          context,
+                          currentPhone: _phoneController.text.trim(),
+                          onPhoneUpdated: () async {
+                            final profile = await ApiService.getUserProfile();
+                            if (profile != null && mounted) {
+                              setState(() {
+                                _phoneController.text = profile['phone'] ?? _phoneController.text;
+                              });
+                            }
+                          },
+                        );
+                      },
+                      icon: const Icon(Icons.verified_user_outlined, size: 14, color: Color(0xFF1B1464)),
+                      label: const Text('Change via OTP', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1B1464))),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 TextFormField(
                   controller: _phoneController,
-                  keyboardType: TextInputType.phone,
+                  readOnly: true,
+                  onTap: () {
+                    PhoneChangeModal.show(
+                      context,
+                      currentPhone: _phoneController.text.trim(),
+                      onPhoneUpdated: () async {
+                        final profile = await ApiService.getUserProfile();
+                        if (profile != null && mounted) {
+                          setState(() {
+                            _phoneController.text = profile['phone'] ?? _phoneController.text;
+                          });
+                        }
+                      },
+                    );
+                  },
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.phone_outlined, color: Color(0xFF1B1464), size: 20),
+                    suffixIcon: const Icon(Icons.edit, color: Color(0xFF1B1464), size: 18),
                     hintText: 'Enter phone number',
                     fillColor: Colors.white,
                     filled: true,

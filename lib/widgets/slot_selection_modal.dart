@@ -116,7 +116,7 @@ class _SlotSelectionModalState extends State<SlotSelectionModal> {
         combinedDateTime = DateTime(dateObj.year, dateObj.month, dateObj.day, parsedTime.hour, parsedTime.minute);
       } catch (_) {}
 
-      final selectedDate = combinedDateTime.toIso8601String();
+      final selectedDate = DateFormat('yyyy-MM-dd').format(combinedDateTime);
 
       for (final id in widget.subserviceIds) {
         await ApiService.updateSlot(id, selectedDate, selectedTime);
