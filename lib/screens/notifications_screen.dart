@@ -118,6 +118,60 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     NotificationSyncService.fetchAndUpdate();
   }
 
+  String? _extractBookingId(Map<String, dynamic> item) {
+    if (item['booking_id'] != null && item['booking_id'].toString().trim().isNotEmpty) {
+      return item['booking_id'].toString().trim();
+    }
+    if (item['bookingId'] != null && item['bookingId'].toString().trim().isNotEmpty) {
+      return item['bookingId'].toString().trim();
+    }
+
+    var metadata = item['metadata'];
+    if (metadata is String && metadata.trim().startsWith('{')) {
+      try {
+        metadata = json.decode(metadata);
+      } catch (_) {}
+    }
+    if (metadata is Map) {
+      if (metadata['booking_id'] != null && metadata['booking_id'].toString().trim().isNotEmpty) {
+        return metadata['booking_id'].toString().trim();
+      }
+      if (metadata['bookingId'] != null && metadata['bookingId'].toString().trim().isNotEmpty) {
+        return metadata['bookingId'].toString().trim();
+      }
+      if (metadata['booking'] != null && metadata['booking'].toString().trim().isNotEmpty) {
+        return metadata['booking'].toString().trim();
+      }
+      if (metadata['_id'] != null && metadata['_id'].toString().trim().isNotEmpty) {
+        return metadata['_id'].toString().trim();
+      }
+    }
+
+    var data = item['data'];
+    if (data is String && data.trim().startsWith('{')) {
+      try {
+        data = json.decode(data);
+      } catch (_) {}
+    }
+    if (data is Map) {
+      if (data['booking_id'] != null && data['booking_id'].toString().trim().isNotEmpty) {
+        return data['booking_id'].toString().trim();
+      }
+      if (data['bookingId'] != null && data['bookingId'].toString().trim().isNotEmpty) {
+        return data['bookingId'].toString().trim();
+      }
+    }
+
+    final text = '${item['title'] ?? ''} ${item['message'] ?? ''}';
+    final regExp = RegExp(r'BK-[A-Z0-9]+', caseSensitive: false);
+    final match = regExp.firstMatch(text);
+    if (match != null) {
+      return match.group(0);
+    }
+
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -184,15 +238,51 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 _markAsRead(item['_id']);
                                 NotificationSyncService.fetchAndUpdate();
                               }
-                              final metadata = item['metadata'];
-                              if (metadata != null && metadata is Map && metadata['booking_id'] != null) {
-                                final bId = metadata['booking_id'].toString();
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => TrackServiceScreen(bookingId: bId),
-                                  ),
-                                );
+                              if (item is Map) {
+                                final bId = _extractBookingId(Map<String, dynamic>.from(item));
+                                if (bId != null && bId.isNotEmpty) {
+                                  final titleLower = (title).toString().toLowerCase();
+                                  final messageLower = (message).toString().toLowerCase();
+                                  final typeLower = (item['type'] ?? '').toString().toLowerCase();
+
+                                  final isRateNotif = titleLower.contains('rate') ||
+                                      titleLower.contains('review') ||
+                                      messageLower.contains('rate') ||
+                                      messageLower.contains('review') ||
+                                      typeLower.contains('rate') ||
+                                      typeLower.contains('review');
+
+                                  final isActiveTrackingNotif = titleLower.contains('started') ||
+                                      titleLower.contains('arrived') ||
+                                      titleLower.contains('way') ||
+                                      titleLower.contains('otp');
+
+                                  if (isRateNotif) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => BookingDetailsScreen(
+                                          bookingId: bId,
+                                          autoOpenRate: true,
+                                        ),
+                                      ),
+                                    );
+                                  } else if (isActiveTrackingNotif) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => TrackServiceScreen(bookingId: bId),
+                                      ),
+                                    );
+                                  } else {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => BookingDetailsScreen(bookingId: bId),
+                                      ),
+                                    );
+                                  }
+                                }
                               }
                             },
                           );
@@ -202,3 +292,4 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 }
+

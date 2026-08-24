@@ -75,12 +75,26 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
       if (bookingId != null && bookingId.toString().isNotEmpty && mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => TrackServiceScreen(bookingId: bookingId.toString()),
-          ),
-        );
+        final typeStr = (type ?? '').toLowerCase();
+        final titleStr = (data['title'] ?? '').toString().toLowerCase();
+        if (typeStr.contains('rate') || typeStr.contains('review') || titleStr.contains('rate') || titleStr.contains('review')) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => BookingDetailsScreen(
+                bookingId: bookingId.toString(),
+                autoOpenRate: true,
+              ),
+            ),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => TrackServiceScreen(bookingId: bookingId.toString()),
+            ),
+          );
+        }
       } else if (mounted) {
         Navigator.push(
           context,
@@ -328,16 +342,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'BharatClap',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w900,
-            color: Color(0xFF16155D),
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 8),
         Row(
           children: [
         Expanded(

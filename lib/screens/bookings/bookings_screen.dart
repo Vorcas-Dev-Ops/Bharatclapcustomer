@@ -136,16 +136,6 @@ class _BookingsScreenState extends State<BookingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'BharatClap',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF16155D),
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
                     'My Bookings',
                     style: TextStyle(
                       fontSize: 20,

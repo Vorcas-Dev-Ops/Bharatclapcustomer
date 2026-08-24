@@ -104,16 +104,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           children: [
                             const SizedBox(height: 16),
                             const Text(
-                              'BharatClap',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF16155D),
-                                letterSpacing: -0.5,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
                               'My Profile',
                               style: TextStyle(
                                 fontSize: 24,

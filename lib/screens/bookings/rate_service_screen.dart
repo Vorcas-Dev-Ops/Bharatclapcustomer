@@ -68,27 +68,27 @@ class _RateServiceScreenState extends State<RateServiceScreen> {
     }
 
     // Extract necessary Mongo ObjectIds from booking object
-    final String bookingId = widget.booking['_id']?.toString() ?? '';
+    final String bookingId = widget.booking['_id']?.toString() ?? widget.booking['id']?.toString() ?? '';
     
     // Extract provider _id
-    final providerData = widget.booking['provider_id'];
+    final providerData = widget.booking['provider_id'] ?? widget.booking['provider'] ?? widget.booking['assigned_provider_id'];
     String providerId = '';
     if (providerData is Map) {
-      providerId = providerData['_id']?.toString() ?? '';
+      providerId = providerData['_id']?.toString() ?? providerData['id']?.toString() ?? '';
     } else if (providerData is String) {
       providerId = providerData;
     }
 
     // Extract subservice and service _id
-    final subserviceData = widget.booking['subservice_id'];
+    final subserviceData = widget.booking['subservice_id'] ?? widget.booking['subservice'];
     String subserviceId = '';
     String serviceId = '';
 
     if (subserviceData is Map) {
-      subserviceId = subserviceData['_id']?.toString() ?? '';
-      final serviceData = subserviceData['service_id'];
+      subserviceId = subserviceData['_id']?.toString() ?? subserviceData['id']?.toString() ?? '';
+      final serviceData = subserviceData['service_id'] ?? subserviceData['service'];
       if (serviceData is Map) {
-        serviceId = serviceData['_id']?.toString() ?? '';
+        serviceId = serviceData['_id']?.toString() ?? serviceData['id']?.toString() ?? '';
       } else if (serviceData is String) {
         serviceId = serviceData;
       }
@@ -96,12 +96,29 @@ class _RateServiceScreenState extends State<RateServiceScreen> {
       subserviceId = subserviceData;
     }
 
-    // If serviceId is not found, fallback to subserviceId or service_id on booking
     if (serviceId.isEmpty) {
-      serviceId = widget.booking['service_id']?.toString() ?? subserviceId;
+      final sData = widget.booking['service_id'] ?? widget.booking['service'];
+      if (sData is Map) {
+        serviceId = sData['_id']?.toString() ?? sData['id']?.toString() ?? '';
+      } else if (sData is String) {
+        serviceId = sData;
+      }
     }
 
-    if (bookingId.isEmpty || providerId.isEmpty || subserviceId.isEmpty || serviceId.isEmpty) {
+    // Fallbacks if items list is used in booking object
+    if ((subserviceId.isEmpty || serviceId.isEmpty) && widget.booking['items'] is List && (widget.booking['items'] as List).isNotEmpty) {
+      final firstItem = widget.booking['items'][0];
+      if (firstItem is Map) {
+        if (subserviceId.isEmpty) subserviceId = firstItem['subservice_id']?.toString() ?? firstItem['subservice']?.toString() ?? '';
+        if (serviceId.isEmpty) serviceId = firstItem['service_id']?.toString() ?? firstItem['service']?.toString() ?? '';
+      }
+    }
+
+    // Ultimate fallbacks so request never fails due to missing ID
+    if (serviceId.isEmpty && subserviceId.isNotEmpty) serviceId = subserviceId;
+    if (subserviceId.isEmpty && serviceId.isNotEmpty) subserviceId = serviceId;
+
+    if (bookingId.isEmpty || providerId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Missing booking details required for review.'),

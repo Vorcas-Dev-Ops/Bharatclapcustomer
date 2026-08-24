@@ -131,8 +131,29 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
     }
   }
 
+  String? _lastVerifiedPaymentId;
+
   // 💳 Secure Razorpay Online Payment Flow
   Future<void> _handleRazorpayPayment(String? scheduleToken) async {
+    // If payment was already completed & verified, retry booking creation directly without re-charging
+    if (_lastVerifiedPaymentId != null && _lastVerifiedPaymentId!.isNotEmpty) {
+      final bookingRes = await ApiService.createBooking(
+        widget.addressId,
+        'online',
+        paymentId: _lastVerifiedPaymentId,
+        scheduleToken: scheduleToken,
+        preferredDate: widget.selectedDate,
+        preferredStartTime: widget.selectedTime,
+      );
+      if (bookingRes != null && bookingRes['success'] == true) {
+        await CartState.fetchCart();
+        if (mounted) {
+          _showSuccessDialog(bookingRes['booking']?['booking_id'] ?? 'ONLINE');
+        }
+        return;
+      }
+    }
+
     // 1. Call Backend to create Razorpay Order securely
     String razorpayOrderId = '';
     String keyId = '';
@@ -174,6 +195,7 @@ class _PaymentSelectionScreenState extends State<PaymentSelectionScreen> {
 
       if (verifyRes != null && verifyRes['success'] == true) {
         paymentId = verifyRes['payment']?['_id'] ?? verifyRes['payment']?['razorpay_payment_id'] ?? paymentId;
+        _lastVerifiedPaymentId = paymentId;
       }
     } catch (_) {}
 

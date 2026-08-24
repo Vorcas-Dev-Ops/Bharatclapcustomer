@@ -8,11 +8,13 @@ import '../../services/api_service.dart';
 class BookingDetailsScreen extends StatefulWidget {
   final String bookingId;
   final dynamic booking;
+  final bool autoOpenRate;
 
   const BookingDetailsScreen({
     super.key,
     required this.bookingId,
     this.booking,
+    this.autoOpenRate = false,
   });
 
   @override
@@ -22,6 +24,7 @@ class BookingDetailsScreen extends StatefulWidget {
 class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
   bool _isLoading = false;
   dynamic _bookingData;
+  bool _hasAutoOpenedRate = false;
 
   @override
   void initState() {
@@ -29,6 +32,10 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     _bookingData = widget.booking;
     if (_bookingData == null) {
       _fetchBookingData();
+    } else if (widget.autoOpenRate) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAndOpenRateModal();
+      });
     }
   }
 
@@ -43,6 +50,11 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
           _bookingData = data;
           _isLoading = false;
         });
+        if (widget.autoOpenRate) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _checkAndOpenRateModal();
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -50,6 +62,23 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  void _checkAndOpenRateModal() {
+    if (!mounted || _bookingData == null || _hasAutoOpenedRate) return;
+    if (_bookingData['status'] == 'completed' && _bookingData['is_reviewed'] != true) {
+      _hasAutoOpenedRate = true;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RateServiceScreen(booking: _bookingData),
+        ),
+      ).then((result) {
+        if (result == true && mounted) {
+          _fetchBookingData();
+        }
+      });
     }
   }
 

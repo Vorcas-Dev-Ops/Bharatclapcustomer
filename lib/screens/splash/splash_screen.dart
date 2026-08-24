@@ -68,7 +68,7 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFF16167E),
       body: SafeArea(
         child: Center(
           child: Column(
@@ -81,7 +81,7 @@ class _SplashScreenState extends State<SplashScreen>
                   opacity: _fadeAnimation,
                   child: Image.asset(
                     'assets/images/splash_logo.png',
-                    width: 280,
+                    width: 320,
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -94,7 +94,7 @@ class _SplashScreenState extends State<SplashScreen>
                   height: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1B1464)),
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 ),
               ),
