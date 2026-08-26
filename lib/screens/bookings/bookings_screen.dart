@@ -312,10 +312,12 @@ class _BookingsScreenState extends State<BookingsScreen> {
       statusDisplay = 'CANCELLED';
       statusBgColor = Colors.red.shade50;
       statusTextColor = Colors.red.shade700;
+    } else if (lowerStatus == 'unassigned_timeout' || lowerStatus == 'high_demand_timeout') {
+      statusDisplay = 'UNABLE TO FIND PROVIDER';
+      statusBgColor = Colors.amber.shade50;
+      statusTextColor = Colors.amber.shade800;
     } else if (lowerStatus == 'expired' ||
         lowerStatus == 'expired_timeout' ||
-        lowerStatus == 'unassigned_timeout' ||
-        lowerStatus == 'high_demand_timeout' ||
         lowerStatus == 'failed') {
       statusDisplay = 'CANCELLED';
       statusBgColor = Colors.red.shade50;
@@ -467,7 +469,7 @@ class _BookingsScreenState extends State<BookingsScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  (statusDisplay == 'CANCELLED' || lowerStatus == 'cancelled' || lowerStatus == 'canceled' || lowerStatus == 'expired' || lowerStatus == 'unassigned_timeout' || lowerStatus == 'high_demand_timeout')
+                  (statusDisplay == 'CANCELLED' || lowerStatus == 'cancelled' || lowerStatus == 'canceled' || lowerStatus == 'expired' || lowerStatus == 'unassigned_timeout' || lowerStatus == 'high_demand_timeout' || statusDisplay == 'UNABLE TO FIND PROVIDER')
                       ? 'No professional assigned'
                       : 'Waiting for professional',
                   style: TextStyle(fontSize: 13, fontStyle: FontStyle.italic, color: Colors.grey.shade600),

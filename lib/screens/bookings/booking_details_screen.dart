@@ -516,31 +516,42 @@ class _BookingDetailsScreenState extends State<BookingDetailsScreen> {
     }
 
     if (isCancelledOrExpired) {
+      final isHighDemandTimeout = status == 'high_demand_timeout' || status == 'unassigned_timeout';
+      final title = isHighDemandTimeout ? 'Unable to Find Provider' : 'Booking Cancelled';
+      final message = isHighDemandTimeout 
+          ? '😔 Sorry! We couldn\'t find a provider. Please try another time.'
+          : 'No professional was assigned by the scheduled time slot. Any deducted amount will be refunded to your account within 4-5 working days.';
+      final bgColor = isHighDemandTimeout ? Colors.amber.shade50 : Colors.red.shade50;
+      final borderColor = isHighDemandTimeout ? Colors.amber.shade200 : Colors.red.shade200;
+      final iconColor = isHighDemandTimeout ? Colors.amber.shade700 : Colors.red.shade700;
+      final titleColor = isHighDemandTimeout ? Colors.amber.shade800 : Colors.red.shade800;
+      final textColor = isHighDemandTimeout ? Colors.amber.shade900 : Colors.red.shade900;
+
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.red.shade50,
+          color: bgColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.shade200),
+          border: Border.all(color: borderColor),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.info_outline, size: 20, color: Colors.red.shade700),
+                Icon(Icons.info_outline, size: 20, color: iconColor),
                 const SizedBox(width: 8),
                 Text(
-                  'Booking Cancelled',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.red.shade800),
+                  title,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: titleColor),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              'No professional was assigned by the scheduled time slot. Any deducted amount will be refunded to your account within 4-5 working days.',
-              style: TextStyle(fontSize: 13, color: Colors.red.shade900, height: 1.4),
+              message,
+              style: TextStyle(fontSize: 13, color: textColor, height: 1.4),
             ),
           ],
         ),
